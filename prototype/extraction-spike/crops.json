@@ -1,0 +1,7 @@
+{
+  "_comment": "Approximate user-crop rectangles [x0,y0,x1,y1] in pixels, eyeballed from thumbnails and DELIBERATELY imperfect (a few px off, excluding number gutters). The spike snaps these to the recovered lattice and reports how far off they were. This simulates a hand-drawn phone crop.",
+  "112w150h-9colors.png": [33, 59, 1027, 1387],
+  "8w37h-2colors.png":    [2, 8, 326, 1516],
+  "74w38h-2colors.png":   [12, 6, 1852, 952],
+  "66w55h-2colors.jpg":   [106, 74, 1800, 1119]
+}

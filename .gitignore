@@ -5,7 +5,11 @@
 __pycache__/
 *.py[cod]
 .venv/
+.venv-spike/
 venv/
+
+# extraction spike — throwaway working files (keep out/, the linked assets)
+prototype/extraction-spike/thumbs/
 *.egg-info/
 .pytest_cache/
 
