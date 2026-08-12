@@ -1,0 +1,7 @@
+{
+  "_comment": "Approximate knitter crop rectangles [x, y, w, h] in source pixels — DELIBERATELY imperfect (a few px off, number gutters excluded), simulating a hand-drawn phone crop. parse_chart snaps them to the recovered lattice. The scan's top edge was moved off y=6, where it fell exactly between two gridlines: that crop is a genuine coin flip (confidence.chart 0.0, one Row lost) rather than a parse to assert against.",
+  "112w150h-9colors.png": [33, 59, 994, 1328],
+  "8w37h-2colors.png":    [2, 8, 324, 1508],
+  "74w38h-2colors.png":   [12, 2, 1840, 946],
+  "66w55h-2colors.jpg":   [106, 74, 1694, 1045]
+}

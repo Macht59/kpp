@@ -1,0 +1,7 @@
+numpy!=2.0.0  # 2.0.0 alone returned a 2-D np.unique(..., return_inverse=True)
+scipy
+scikit-image
+pillow
+
+# tests
+pytest
