@@ -1,10 +1,10 @@
-// Pick an image, draw a rectangle around the grid, parse it, see the Chart.
-// Review and Knit arrive in later tickets.
+// Pick an image, draw a rectangle around the grid, parse it, then Knit the
+// Chart a Row at a time. Review arrives in a later ticket.
 
+import { cellsOfRow, entryLabel, rowCount, rowIndex, rowNumber, runsOfRow } from "./chart.js";
 import { corners, grabbedAnchor, rectFrom, wholePixels } from "./crop.js";
 
 const PARSE_TIMEOUT_MS = 30_000; // against a measured ~10 s parse
-const MAX_CANVAS_PX = 1200; // a 112-Cell Chart is legible long before this
 const HANDLE_CSS_PX = 11; // drawn radius; grabbed at twice that, a 44 px target
 
 const file = document.getElementById("file");
@@ -15,8 +15,18 @@ const rectangle = document.getElementById("rectangle");
 const whole = document.getElementById("whole");
 const status = document.getElementById("status");
 const error = document.getElementById("error");
-const canvas = document.getElementById("chart");
+const knit = document.getElementById("knit");
+const wholeChart = document.getElementById("whole-chart");
+const overview = document.getElementById("overview");
+const marker = document.getElementById("marker");
+const band = document.getElementById("band");
+const rowLabel = document.getElementById("row-label");
+const readout = document.getElementById("readout");
+const next = document.getElementById("next");
+const previous = document.getElementById("previous");
 
+let chart = null;
+let selected = 1; // the Row being knitted, numbered from the bottom of the image
 let chosen = null;
 let crop = null; // in image pixels, so it survives the image being laid out differently
 let anchor = null; // the corner held still for the drag in progress
@@ -27,7 +37,7 @@ file.addEventListener("change", () => {
   crop = null;
   say(status, null);
   say(error, null);
-  canvas.hidden = true;
+  knit.hidden = true;
   stage.hidden = !chosen;
   whole.disabled = !chosen;
   rectangle.disabled = true;
@@ -73,11 +83,10 @@ async function parseAndDraw(rect) {
   say(error, null);
   say(status, "Parsing… this takes a few seconds.");
   try {
-    drawChart(canvas, await parse(chosen, rect));
-    canvas.hidden = false;
+    show(await parse(chosen, rect));
     say(status, null);
   } catch (failure) {
-    canvas.hidden = true; // a stale Chart under the message reads as this crop's output
+    knit.hidden = true; // a stale Chart under the message reads as this crop's output
     say(status, null);
     say(error, failure.message);
   } finally {
@@ -111,24 +120,74 @@ async function parse(image, { x, y, w, h }) {
   return chart;
 }
 
-/** Draw the Chart at whatever whole number of px per Cell fits. */
-function drawChart(canvas, chart) {
-  const { rows, cols } = chart.dimensions;
-  const size = Math.max(1, Math.floor(Math.min(MAX_CANVAS_PX / cols, MAX_CANVAS_PX / rows)));
-  canvas.width = cols * size;
-  canvas.height = rows * size;
+/** Knit a freshly parsed Chart, starting at the bottom Row. */
+function show(parsed) {
+  chart = parsed;
+  selected = 1;
+  drawCells(wholeChart, chart.cells);
+  knit.hidden = false;
+  drawRow();
+}
 
+/** The Selected Row: where it sits, its colour bands, and its Readout. */
+function drawRow() {
+  const rows = rowCount(chart);
+  const runs = runsOfRow(chart, selected);
+  const stitches = runs.reduce((total, run) => total + run.count, 0);
+
+  marker.style.top = `${(rowIndex(chart, selected) * 100) / rows}%`;
+  marker.style.height = `${100 / rows}%`;
+  drawCells(band, [cellsOfRow(chart, selected)]);
+
+  rowLabel.textContent = `Row ${selected} of ${rows} — ${stitches} stitches`;
+  readout.replaceChildren(...runs.map(chip));
+  previous.disabled = selected === 1;
+  next.disabled = selected === rows;
+}
+
+/** One Run: a swatch and a Cell count, big enough to hit. */
+function chip({ entry, count }) {
+  const item = document.createElement("li");
+  const swatch = document.createElement("span");
+  swatch.className = "swatch";
+  swatch.style.background = rgb(chart.palette[entry].rgb);
+  item.append(swatch, `${count} ${entryLabel(chart, entry)}`);
+  return item;
+}
+
+/** Draw Cells one canvas pixel each; CSS stretches them to whatever width the phone has. */
+function drawCells(canvas, cells) {
+  canvas.width = cells[0].length; // also clears
+  canvas.height = cells.length;
   const context = canvas.getContext("2d");
-  context.clearRect(0, 0, canvas.width, canvas.height);
-  chart.cells.forEach((row, r) =>
+  cells.forEach((row, r) =>
     row.forEach((cell, c) => {
       if (cell < 0) return; // Non-stitch is background, not yarn: leave it transparent
-      const [red, green, blue] = chart.palette[cell].rgb;
-      context.fillStyle = `rgb(${red} ${green} ${blue})`;
-      context.fillRect(c * size, r * size, size, size);
+      context.fillStyle = rgb(chart.palette[cell].rgb);
+      context.fillRect(c, r, 1, 1);
     }),
   );
 }
+
+const rgb = ([red, green, blue]) => `rgb(${red} ${green} ${blue})`;
+
+for (const [button, step] of [
+  [next, 1],
+  [previous, -1],
+]) {
+  button.addEventListener("click", () => {
+    selected = Math.min(Math.max(selected + step, 1), rowCount(chart));
+    drawRow();
+  });
+}
+
+// Tapping a Row in the overview jumps to it — losing your place is recoverable.
+overview.addEventListener("click", (event) => {
+  const box = wholeChart.getBoundingClientRect();
+  const index = Math.floor(((event.clientY - box.top) / box.height) * rowCount(chart));
+  selected = rowNumber(chart, Math.min(Math.max(index, 0), rowCount(chart) - 1));
+  drawRow();
+});
 
 /** Dim everything outside the rectangle, then outline it and draw its handles. */
 function drawCrop() {
