@@ -26,6 +26,10 @@ _Avoid_: Section, block, group, segment
 A Cell inside the Chart's bounds that is background rather than yarn — the area outside a garment's silhouette. Rendered transparent.
 _Avoid_: Empty, blank, null cell
 
+**Chart library**:
+The set of Charts held on the knitter's device, each kept alongside the image it was parsed from.
+_Avoid_: Collection, projects, gallery
+
 ### Colour
 
 **Palette**:
@@ -36,6 +40,14 @@ _Avoid_: Colours, swatch
 A Palette entry mapped to an actual yarn the knitter will use.
 _Avoid_: Yarn colour, thread
 
+**Repaint**:
+To set a Cell, or a contiguous span of Cells, to a different Palette entry — or to Non-stitch.
+_Avoid_: Recolour, fill, edit
+
+**Re-parse**:
+To adjust the crop or lattice a Chart was parsed with and parse the image again, producing a new Chart. Repaints do not carry across, because re-gridding changes which Cell is which.
+_Avoid_: Re-crop, refresh, redo
+
 ### Reading
 
 **Select**:
@@ -45,3 +57,19 @@ _Avoid_: Choose, pick, activate
 **Readout**:
 The text describing a Row's Runs in reading order — how many Cells of which colour, in sequence.
 _Avoid_: Instructions, transcript, description
+
+**Reading direction**:
+Which way a single Row is read: left-to-right or right-to-left. A property of reading a Row, never of the stored Chart.
+_Avoid_: Orientation, reading order, direction mode
+
+**Construction**:
+How the garment is knitted — flat or in the round — and therefore whether Reading direction alternates each Row (flat, because the work is turned) or stays constant (in the round, because it never is).
+_Avoid_: Reading direction, reading mode, style
+
+**Knit**:
+To work a Chart Row by Row: Select a Row, read its Readout, advance to the next.
+_Avoid_: Read, play, follow
+
+**Review**:
+To check a parsed Chart against the image it came from and correct what is wrong. Every parse is Reviewed; a Chart can be Reviewed again at any time.
+_Avoid_: Verify, approve, proofread
