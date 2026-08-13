@@ -19,6 +19,20 @@ python -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python -m pytest tests/
 ```
 
+## The app
+
+`python server.py` serves the client and the parse endpoint from one process on
+`http://localhost:8000`, same-origin. Pick a chart image, tap *use whole image*,
+and the parsed Chart is drawn on a canvas.
+
+The client is plain ES modules and a canvas in `web/` — no build step, per
+[ADR-0004](docs/adr/0004-vanilla-canvas-pwa-client.md). `POST /api/parse` takes
+the image as a multipart upload plus the crop as `x, y, w, h`, and returns the
+schema-1 Chart. A parser `ValueError` comes back as a 400 carrying the parser's
+own message, because every one of them is something the knitter can act on; an
+upload over 20 MB is refused with a 413 rather than truncated and parsed into a
+plausible, wrong Chart.
+
 The corpus tests need the chart screenshots in `tests/examples/` (not in git —
 see [the manifest](tests/examples/MANIFEST.md)); they skip without them.
 

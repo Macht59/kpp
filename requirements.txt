@@ -3,5 +3,8 @@ scipy
 scikit-image
 pillow
 
+# web
+flask
+
 # tests
 pytest
