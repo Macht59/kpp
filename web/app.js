@@ -1,7 +1,18 @@
 // Pick an image, draw a rectangle around the grid, parse it, then Knit the
 // Chart a Row at a time. Review arrives in a later ticket.
 
-import { cellsOfRow, entryLabel, rowCount, rowIndex, rowNumber, runsOfRow } from "./chart.js";
+import {
+  FLAT,
+  RIGHT_TO_LEFT,
+  cellsOfRow,
+  entryLabel,
+  opposite,
+  readingDirection,
+  rowCount,
+  rowIndex,
+  rowNumber,
+  runsOfRow,
+} from "./chart.js";
 import { corners, grabbedAnchor, rectFrom, wholePixels } from "./crop.js";
 
 const PARSE_TIMEOUT_MS = 30_000; // against a measured ~10 s parse
@@ -24,9 +35,18 @@ const rowLabel = document.getElementById("row-label");
 const readout = document.getElementById("readout");
 const next = document.getElementById("next");
 const previous = document.getElementById("previous");
+const flip = document.getElementById("flip");
+const constructionChoice = document.getElementById("construction");
+const startChoice = document.getElementById("start");
+const directionBar = document.getElementById("direction");
+const arrow = document.getElementById("arrow");
+const directionWords = document.getElementById("direction-words");
 
 let chart = null;
 let selected = 1; // the Row being knitted, numbered from the bottom of the image
+// Construction and Reading direction are the knitter's, per Chart: the parser
+// cannot supply them, and neither is ever written into `cells`.
+let reading = { construction: FLAT, start: RIGHT_TO_LEFT, flips: {} };
 let chosen = null;
 let crop = null; // in image pixels, so it survives the image being laid out differently
 let anchor = null; // the corner held still for the drag in progress
@@ -124,6 +144,7 @@ async function parse(image, { x, y, w, h }) {
 function show(parsed) {
   chart = parsed;
   selected = 1;
+  reading = chosenReading({});
   drawCells(wholeChart, chart.cells);
   knit.hidden = false;
   drawRow();
@@ -132,12 +153,20 @@ function show(parsed) {
 /** The Selected Row: where it sits, its colour bands, and its Readout. */
 function drawRow() {
   const rows = rowCount(chart);
-  const runs = runsOfRow(chart, selected);
+  const direction = readingDirection(reading, selected);
+  const runs = runsOfRow(chart, selected, direction);
   const stitches = runs.reduce((total, run) => total + run.count, 0);
 
   marker.style.top = `${(rowIndex(chart, selected) * 100) / rows}%`;
   marker.style.height = `${100 / rows}%`;
   drawCells(band, [cellsOfRow(chart, selected)]);
+
+  const rightToLeft = direction === RIGHT_TO_LEFT;
+  directionBar.className = direction;
+  arrow.textContent = rightToLeft ? "←" : "→";
+  directionWords.textContent = `Reading ${rightToLeft ? "right to left" : "left to right"}${
+    reading.flips[selected] ? " — flipped by hand" : ""
+  }`;
 
   rowLabel.textContent = `Row ${selected} of ${rows} — ${stitches} stitches`;
   readout.replaceChildren(...runs.map(chip));
@@ -180,6 +209,34 @@ for (const [button, step] of [
     drawRow();
   });
 }
+
+/** What the two controls currently say, over the Rows already Flipped by hand. */
+const chosenReading = (flips) => ({
+  construction: constructionChoice.value,
+  start: startChoice.value,
+  flips,
+});
+
+// Both controls sit inside the Knit section, so neither can fire before a Chart
+// is on screen. A Flipped Row keeps its direction across the change: it was set
+// to correct exactly this rule.
+for (const control of [constructionChoice, startChoice]) {
+  control.addEventListener("change", () => {
+    reading = chosenReading(reading.flips);
+    drawRow();
+  });
+}
+
+// One Row Flipped by hand, for when the alternation has slipped — frogged a
+// Row, or started on the wrong side. Flipping a Flipped Row hands it back to
+// the Construction.
+flip.addEventListener("click", () => {
+  const flips = { ...reading.flips };
+  if (flips[selected]) delete flips[selected];
+  else flips[selected] = opposite(readingDirection(reading, selected));
+  reading = { ...reading, flips };
+  drawRow();
+});
 
 // Tapping a Row in the overview jumps to it — losing your place is recoverable.
 overview.addEventListener("click", (event) => {

@@ -27,6 +27,12 @@ the grid — the number gutters have to stay outside it, or the Cell count comes
 out wrong — and the parsed Chart is drawn on a canvas. *Use whole image* is the
 shortcut for a screenshot that is already cropped.
 
+Which way a Row is read follows the garment's Construction: flat turns the work
+every Row so the direction alternates, in the round never turns so it holds, and
+a single Row can be Flipped when the alternation slips. Both are the knitter's
+to set — the parser cannot read them, because the gutter numbers they come from
+sit outside the crop — and neither is ever written into `cells`.
+
 The client is plain ES modules and a canvas in `web/` — no build step, per
 [ADR-0004](docs/adr/0004-vanilla-canvas-pwa-client.md). Its pure logic is tested
 under Node's own runner, a test-time requirement and never a build step:

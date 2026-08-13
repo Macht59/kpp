@@ -4,6 +4,26 @@
 const NON_STITCH = -1;
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
+export const FLAT = "flat";
+export const IN_THE_ROUND = "in the round";
+export const RIGHT_TO_LEFT = "right-to-left";
+export const LEFT_TO_RIGHT = "left-to-right";
+
+export const opposite = (direction) =>
+  direction === RIGHT_TO_LEFT ? LEFT_TO_RIGHT : RIGHT_TO_LEFT;
+
+/**
+ * Which way a Row is read, from the Chart's Construction, its starting
+ * direction, and the Rows the knitter has Flipped. Flat turns the work every
+ * Row so the direction alternates; in the round never turns so it holds. A Flip
+ * wins over both — that is how a knitter recovers when the alternation has
+ * slipped. Derived from the Row number alone, so retreating to a Row reads the
+ * same way as arriving at it forwards.
+ */
+export function readingDirection({ construction, start, flips }, row) {
+  return flips[row] ?? (construction === FLAT && (row - 1) % 2 === 1 ? opposite(start) : start);
+}
+
 /**
  * What a chip calls a Palette entry. The stateless service leaves `name` null,
  * so the position stands in until a Colorway is mapped to it.
@@ -36,11 +56,16 @@ export function cellsOfRow(chart, row) {
 }
 
 /**
- * The Runs of a Row, in reading order. Non-stitch is background rather than
- * yarn, so it is left out — and it *splits* the Runs around it rather than
- * joining them, or the knitter counts stitches that are not there.
+ * The Runs of a Row, in reading order — reversed for a Row read right to left.
+ * Non-stitch is background rather than yarn, so it is left out — and it
+ * *splits* the Runs around it rather than joining them, or the knitter counts
+ * stitches that are not there.
  */
-export function runsOfRow(chart, row) {
+export function runsOfRow(chart, row, direction) {
+  // Reading a Row the wrong way round is the mistake this ticket exists to
+  // prevent, so a caller that forgets the direction is refused, not defaulted.
+  if (direction !== RIGHT_TO_LEFT && direction !== LEFT_TO_RIGHT)
+    throw new Error(`reading direction must be given, not ${direction}`);
   const runs = [];
   let open = null; // the Run being counted; null across a Non-stitch gap
   for (const cell of cellsOfRow(chart, row)) {
@@ -48,5 +73,5 @@ export function runsOfRow(chart, row) {
     else if (open?.entry === cell) open.count += 1;
     else runs.push((open = { entry: cell, count: 1 }));
   }
-  return runs;
+  return direction === RIGHT_TO_LEFT ? runs.reverse() : runs;
 }

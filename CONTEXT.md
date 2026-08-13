@@ -62,6 +62,10 @@ _Avoid_: Instructions, transcript, description
 Which way a single Row is read: left-to-right or right-to-left. A property of reading a Row, never of the stored Chart.
 _Avoid_: Orientation, reading order, direction mode
 
+**Flip**:
+To set one Row's Reading direction by hand, against what the Construction implies — how a knitter recovers when the alternation has slipped.
+_Avoid_: Override, toggle, reverse
+
 **Construction**:
 How the garment is knitted — flat or in the round — and therefore whether Reading direction alternates each Row (flat, because the work is turned) or stays constant (in the round, because it never is).
 _Avoid_: Reading direction, reading mode, style

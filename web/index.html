@@ -45,6 +45,18 @@
     font-variant-numeric: tabular-nums;
   }
   .swatch { width: 28px; height: 28px; border: 1px solid currentColor; border-radius: 0.25rem; }
+  /* Knitting a Row backwards is the mistake this bar exists to prevent, so it
+     says the direction in an arrow and in words, right under the Row it describes. */
+  #direction {
+    display: flex; align-items: center; gap: 0.6rem;
+    margin: 0; padding: 0.4rem 0.7rem;
+    font-size: 1.15rem; font-weight: 700;
+    border: 2px solid currentColor; border-radius: 0.5rem;
+  }
+  #direction.left-to-right { flex-direction: row-reverse; } /* the arrow leads, whichever way it points */
+  #arrow { font-size: 1.6rem; line-height: 1; }
+  .setting { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+  .setting select { font: inherit; padding: 0.5rem; flex: 1; min-width: 0; }
   #stage { position: relative; width: fit-content; margin: 0 auto; }
   #overlay { position: absolute; inset: 0; touch-action: none; }
   #hint { margin: 0; text-align: center; opacity: 0.8; }
@@ -82,10 +94,24 @@
       <div id="marker"></div>
     </div>
     <canvas id="band"></canvas>
+    <p id="direction"><span id="arrow"></span><span id="direction-words"></span></p>
     <h2 id="row-label"></h2>
     <ul id="readout"></ul>
     <button id="next">Next row</button>
     <button id="previous">Previous row</button>
+    <button id="flip">Flip this row</button>
+    <label class="setting">Construction
+      <select id="construction">
+        <option value="flat">Flat — the work is turned every row</option>
+        <option value="in the round">In the round — never turned</option>
+      </select>
+    </label>
+    <label class="setting">Row 1 reads
+      <select id="start">
+        <option value="right-to-left">Right to left</option>
+        <option value="left-to-right">Left to right</option>
+      </select>
+    </label>
   </section>
 
   <script type="module" src="app.js"></script>
