@@ -26,5 +26,3 @@ build/
 # OS
 .DS_Store
 Thumbs.db
-tests/examples/*.png
-tests/examples/*.jpg
