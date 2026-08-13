@@ -48,7 +48,7 @@ the chart-logic module so nothing else in the client thinks about it.
 - [x] Tapping a Row in the overview jumps to it
 - [x] Next and Previous Row buttons advance and retreat one Row
 - [x] Row numbering is bottom-to-top, confirmed against the knitter before it is relied on
-- [ ] Legible and usable on both the 8-Cell-wide and 112-Cell-wide corpus charts
+- [x] Legible and usable on both the 8-Cell-wide and 112-Cell-wide corpus charts
 - [x] Chart logic lives in a module with no DOM, canvas or storage dependency
 - [x] Chart-logic tests run under Node's built-in test runner with no package manifest, dependency or bundler
 - [x] Runs tests cover: consecutive same-entry Cells collapsing with a count; Non-stitch Cells **splitting** Runs rather than joining across them; a single-colour Row as one Run; an alternating Row as one Run per Cell; the Row-number inversion
@@ -84,6 +84,17 @@ Measured on the corpus, chips per Row: `112w150h` min 1, median 7, max 24;
 `8w37h` min 1, median 4, max 8. The spec's 5–15 estimate holds, and the worst
 Row is 24 chips of free vertical scroll.
 
-**One box left unticked:** legibility on the 8-Cell and 112-Cell charts is
-checked by eye, and the browser was not drivable from the implementing session.
-The headless numbers above are the arithmetic half of it only.
+Checked by eye at 390×844, both extremes, driving the real page in headless
+Chrome over CDP — image picked, crop dragged, parsed, screenshotted. `8w37h`
+Row 1: three chips, band full width at 358 px. `112w150h` Row 64, the busiest
+in the chart: 24 chips wrapping to twelve lines, every chip 44 px, no
+horizontal scroll anywhere. Row 1's marker sits at `top: 99.33%` and Row 150's
+at `0%`, so the bottom-to-top inversion is confirmed on screen and not only in
+the tests. Next and Previous step one Row and disable at each end.
+
+**A limit found while checking, not a defect:** the overview tap is coarse. 150
+Rows squashed into a 6 rem overview is 1.6 Rows per CSS px, and a 44 px
+fingertip spans 68 Rows, so tapping lands the knitter *near* a Row, not on it —
+inherent to a slim overview, not fixable by code. It is a get-close control and
+Next/Previous does the fine adjustment, which is how losing your place is
+recovered. Worth knowing before ticket 08 treats the overview as precise.
