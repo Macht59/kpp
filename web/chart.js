@@ -24,6 +24,20 @@ export function readingDirection({ construction, start, flips }, row) {
   return flips[row] ?? (construction === FLAT && (row - 1) % 2 === 1 ? opposite(start) : start);
 }
 
+// `confidence.chart` is 1.0 when the crop's edges landed on gridlines and 0.0
+// when one sat exactly between two — a coin flip that may have cost a Cell. The
+// four corpus crops, drawn a few px off by hand as a knitter's would be, score
+// 0.06, 0.26, 0.31 and 0.8 and every one of them parsed to the right size, so a
+// warning at half-confidence would cry wolf on three parses in four. The banner
+// is reserved for the coin-flip end; the dimensions Review shows are the real
+// defence. `ponytail:` a guess fitted to four crops — retune on real use.
+const DOUBTFUL_BELOW = 0.2;
+
+/** Whether the crop may have snapped a Cell out. `confidence` is optional in the contract. */
+export function cropIsDoubtful(chart) {
+  return (chart.confidence?.chart ?? 1) < DOUBTFUL_BELOW;
+}
+
 /**
  * What a chip calls a Palette entry. The stateless service leaves `name` null,
  * so the position stands in until a Colorway is mapped to it.

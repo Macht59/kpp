@@ -27,6 +27,16 @@ the grid — the number gutters have to stay outside it, or the Cell count comes
 out wrong — and the parsed Chart is drawn on a canvas. *Use whole image* is the
 shortcut for a screenshot that is already cropped.
 
+A fresh parse opens in **Review**, because nothing has checked it yet. Review is
+a survey: it opens on the whole Chart, pans and pinches freely from there, and
+toggles to the image it was parsed from — shown through a window the shape of
+the crop, so the two are the same picture and the toggle is a comparison. Above
+them are the two facts no correction can fix: the Chart's size and how many
+Palette entries came back. Both have to be parsed again rather than repainted,
+and the count of entries is the only defence against a Palette that merged
+silently. A crop the parser was unsure of adds a banner. *Knit this chart*
+leaves Review; *Review this parse* comes back, at any Row, at any time.
+
 Which way a Row is read follows the garment's Construction: flat turns the work
 every Row so the direction alternates, in the round never turns so it holds, and
 a single Row can be Flipped when the alternation slips. Both are the knitter's

@@ -8,6 +8,7 @@ import {
   LEFT_TO_RIGHT,
   RIGHT_TO_LEFT,
   cellsOfRow,
+  cropIsDoubtful,
   entryLabel,
   readingDirection,
   rowCount,
@@ -150,4 +151,13 @@ test("right-to-left reverses the Runs, and never touches the Chart", () => {
 
 test("Runs asked for without a direction are refused rather than read one way", () => {
   assert.throws(() => runsOfRow(CHART, 1), /reading direction must be given/);
+});
+
+test("only a crop near the coin flip is doubtful, and a Chart without the signal never is", () => {
+  const scored = (score) => ({ ...CHART, confidence: { chart: score, cells: [] } });
+  assert.equal(cropIsDoubtful(scored(0.0)), true); // an edge exactly between two gridlines
+  assert.equal(cropIsDoubtful(scored(0.06)), true);
+  assert.equal(cropIsDoubtful(scored(0.26)), false); // a corpus crop that parsed to the right size
+  assert.equal(cropIsDoubtful(scored(0.92)), false);
+  assert.equal(cropIsDoubtful(CHART), false); // `confidence` is optional in the contract
 });

@@ -27,7 +27,7 @@
 
   /* Three stacked full-width bands. Both canvases hold one pixel per Cell and
      are stretched by CSS, so 8 and 112 columns both land full width. */
-  #knit { display: flex; flex-direction: column; gap: 0.6rem; }
+  #knit, #review, #settings { display: flex; flex-direction: column; gap: 0.6rem; }
   #knit canvas { width: 100%; image-rendering: pixelated; }
   #overview { position: relative; }
   #whole-chart { height: 6rem; }
@@ -57,6 +57,25 @@
   #arrow { font-size: 1.6rem; line-height: 1; }
   .setting { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
   .setting select { font: inherit; padding: 0.5rem; flex: 1; min-width: 0; }
+  /* Review: whatever the pan and pinch have done to it, the Chart is one
+     element in a window, so touch-action: none — every gesture is the app's. */
+  #viewport {
+    position: relative; overflow: hidden; height: 60vh;
+    touch-action: none; border: 1px solid currentColor; border-radius: 0.5rem;
+  }
+  #pannable { position: absolute; top: 0; left: 0; width: 100%; transform-origin: 0 0; }
+  #pannable > * { width: 100%; }
+  #review-chart { image-rendering: pixelated; }
+  /* The image is shown through a window the shape of the crop, scaled so the
+     crop fills it: the toggle then swaps like for like rather than two
+     differently framed pictures. */
+  #cropped { position: relative; overflow: hidden; }
+  #cropped img { display: block; max-width: none; }
+  #size { font-size: 1.25rem; }
+  #palette-size { margin: 0; font-size: 1.25rem; font-weight: 700; } /* nine entries coming back as seven is silent otherwise */
+  #palette { display: flex; flex-wrap: wrap; gap: 0.4rem; list-style: none; margin: 0; padding: 0; }
+  #doubt { padding: 0.75rem; margin: 0; border: 1px solid #b7791f; border-radius: 0.5rem; color: #b7791f; }
+
   #stage { position: relative; width: fit-content; margin: 0 auto; }
   #overlay { position: absolute; inset: 0; touch-action: none; }
   #hint { margin: 0; text-align: center; opacity: 0.8; }
@@ -88,6 +107,29 @@
   <p id="status" role="status" hidden></p>
   <p id="error" role="alert" hidden></p>
 
+  <button id="mode" hidden></button>
+
+  <!-- Review: a survey of the whole Chart against the image it came from. Free
+       pan and pinch at any zoom, and no Row strip — Knit's navigation model is
+       the opposite one. -->
+  <section id="review" hidden>
+    <p id="doubt" role="status" hidden>The parser was unsure the rectangle
+      snapped to the grid, so this chart may be a row or a column out. Check the
+      size below against your pattern, and drag the rectangle again if it is wrong.</p>
+    <h2 id="size"></h2>
+    <p id="palette-size"></p>
+    <ul id="palette"></ul>
+    <div id="viewport">
+      <div id="pannable">
+        <canvas id="review-chart"></canvas>
+        <div id="cropped" hidden>
+          <img id="review-image" alt="The image this chart was parsed from">
+        </div>
+      </div>
+    </div>
+    <button id="compare">Show the image</button>
+  </section>
+
   <section id="knit" hidden>
     <div id="overview" title="Tap a row to jump to it">
       <canvas id="whole-chart"></canvas>
@@ -100,6 +142,11 @@
     <button id="next">Next row</button>
     <button id="previous">Previous row</button>
     <button id="flip">Flip this row</button>
+  </section>
+
+  <!-- Set at Review, changed in Knit: neither is in the Chart, and the parser
+       cannot supply them. They sit outside both modes so they belong to both. -->
+  <div id="settings" hidden>
     <label class="setting">Construction
       <select id="construction">
         <option value="flat">Flat — the work is turned every row</option>
@@ -112,7 +159,7 @@
         <option value="left-to-right">Left to right</option>
       </select>
     </label>
-  </section>
+  </div>
 
   <script type="module" src="app.js"></script>
 </body>

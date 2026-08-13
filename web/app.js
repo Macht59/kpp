@@ -1,10 +1,11 @@
-// Pick an image, draw a rectangle around the grid, parse it, then Knit the
-// Chart a Row at a time. Review arrives in a later ticket.
+// Pick an image, draw a rectangle around the grid, parse it, Review what came
+// back against the image, then Knit the Chart a Row at a time.
 
 import {
   FLAT,
   RIGHT_TO_LEFT,
   cellsOfRow,
+  cropIsDoubtful,
   entryLabel,
   opposite,
   readingDirection,
@@ -17,6 +18,9 @@ import { corners, grabbedAnchor, rectFrom, wholePixels } from "./crop.js";
 
 const PARSE_TIMEOUT_MS = 30_000; // against a measured ~10 s parse
 const HANDLE_CSS_PX = 11; // drawn radius; grabbed at twice that, a 44 px target
+const MAX_ZOOM = 20; // 3.2 px per Cell fit-width on the widest corpus chart, so 20x is a fat Cell
+const REVIEW = "review";
+const KNIT = "knit";
 
 const file = document.getElementById("file");
 const stage = document.getElementById("stage");
@@ -26,6 +30,19 @@ const rectangle = document.getElementById("rectangle");
 const whole = document.getElementById("whole");
 const status = document.getElementById("status");
 const error = document.getElementById("error");
+const modeSwitch = document.getElementById("mode");
+const review = document.getElementById("review");
+const doubt = document.getElementById("doubt");
+const size = document.getElementById("size");
+const paletteSize = document.getElementById("palette-size");
+const paletteList = document.getElementById("palette");
+const viewport = document.getElementById("viewport");
+const pannable = document.getElementById("pannable");
+const reviewChart = document.getElementById("review-chart");
+const cropped = document.getElementById("cropped");
+const reviewImage = document.getElementById("review-image");
+const compare = document.getElementById("compare");
+const settings = document.getElementById("settings");
 const knit = document.getElementById("knit");
 const wholeChart = document.getElementById("whole-chart");
 const overview = document.getElementById("overview");
@@ -43,6 +60,8 @@ const arrow = document.getElementById("arrow");
 const directionWords = document.getElementById("direction-words");
 
 let chart = null;
+let mode = null; // Review or Knit; null until a Chart is on screen
+let view = { scale: 1, x: 0, y: 0 }; // the Review pan and zoom, in CSS px of the viewport
 let selected = 1; // the Row being knitted, numbered from the bottom of the image
 // Construction and Reading direction are the knitter's, per Chart: the parser
 // cannot supply them, and neither is ever written into `cells`.
@@ -57,7 +76,7 @@ file.addEventListener("change", () => {
   crop = null;
   say(status, null);
   say(error, null);
-  knit.hidden = true;
+  setMode(null);
   stage.hidden = !chosen;
   whole.disabled = !chosen;
   rectangle.disabled = true;
@@ -106,7 +125,7 @@ async function parseAndDraw(rect) {
     show(await parse(chosen, rect));
     say(status, null);
   } catch (failure) {
-    knit.hidden = true; // a stale Chart under the message reads as this crop's output
+    setMode(null); // a stale Chart under the message reads as this crop's output
     say(status, null);
     say(error, failure.message);
   } finally {
@@ -140,14 +159,83 @@ async function parse(image, { x, y, w, h }) {
   return chart;
 }
 
-/** Knit a freshly parsed Chart, starting at the bottom Row. */
+/** A freshly parsed Chart is unverified, so it opens in Review, at its bottom Row. */
 function show(parsed) {
   chart = parsed;
   selected = 1;
   reading = chosenReading({});
   drawCells(wholeChart, chart.cells);
-  knit.hidden = false;
+  drawCells(reviewChart, chart.cells);
+  reviewImage.src = source.src;
+  frameTheImage();
+  showImage(false);
   drawRow();
+  drawFacts();
+  setMode(REVIEW);
+}
+
+/** Show Review, Knit, or neither. The two are navigation models, so only one is up. */
+function setMode(wanted) {
+  mode = chart ? wanted : null;
+  review.hidden = mode !== REVIEW;
+  knit.hidden = mode !== KNIT;
+  modeSwitch.hidden = settings.hidden = mode === null;
+  modeSwitch.textContent = mode === REVIEW ? "Knit this chart" : "Review this parse";
+  if (mode === REVIEW) resetView(); // the survey starts from the whole Chart every time
+}
+
+// Reviewing is a step, not a destination — and a parse error noticed at Row 88
+// is only fixable if the way back is always there.
+modeSwitch.addEventListener("click", () => setMode(mode === REVIEW ? KNIT : REVIEW));
+
+/**
+ * The three signals a knitter checks a parse against. Dimensions and Palette
+ * size are the errors that cannot be corrected, only parsed again — and a
+ * Palette that came back short is silent otherwise: no error, no low
+ * confidence, just seven swatches where the pattern says nine.
+ */
+function drawFacts() {
+  // Stated from `cells` rather than from `dimensions`: the contract declares
+  // both and they agree, but only one of them is the Chart that gets knitted.
+  const entries = chart.palette.length;
+  size.textContent = `${rowCount(chart)} rows × ${chart.cells[0].length} columns`;
+  paletteSize.textContent = `${entries} ${entries === 1 ? "colour" : "colours"}`;
+  paletteList.replaceChildren(...chart.palette.map(dot));
+  doubt.hidden = !cropIsDoubtful(chart);
+}
+
+/** One Palette entry, so the count is something the eye catches rather than reads. */
+function dot(entry) {
+  const item = document.createElement("li");
+  item.className = "swatch";
+  item.style.background = rgb(entry.rgb);
+  return item;
+}
+
+compare.addEventListener("click", () => showImage(cropped.hidden));
+
+/**
+ * The Chart, or the image it was parsed from — shown through a window the shape
+ * of the crop, so the two are the same picture of the same thing and the toggle
+ * is a comparison rather than two views. Deskew is not undone: `skew_deg` is a
+ * fraction of a degree on the corpus, which is nothing at a Chart's scale.
+ */
+function frameTheImage() {
+  const [x, y, w] = chart.source.crop;
+  const zoom = chart.source.image_width / w; // the crop, whatever its size, fills the window
+  cropped.style.aspectRatio = `${chart.cells[0].length} / ${rowCount(chart)}`;
+  reviewImage.style.width = `${zoom * 100}%`;
+  // percentage margins resolve against the window's width, which is the crop's width
+  reviewImage.style.marginLeft = `${(-x * 100) / w}%`;
+  reviewImage.style.marginTop = `${(-y * 100) / w}%`;
+}
+
+/** Swap the two, leaving the pan and zoom where the knitter put them. */
+function showImage(wanted) {
+  cropped.hidden = !wanted;
+  reviewChart.hidden = wanted;
+  compare.textContent = wanted ? "Show the chart" : "Show the image";
+  applyView();
 }
 
 /** The Selected Row: where it sits, its colour bands, and its Readout. */
@@ -217,9 +305,9 @@ const chosenReading = (flips) => ({
   flips,
 });
 
-// Both controls sit inside the Knit section, so neither can fire before a Chart
-// is on screen. A Flipped Row keeps its direction across the change: it was set
-// to correct exactly this rule.
+// Both controls are hidden until a Chart is on screen, and belong to neither
+// mode: they are set at Review and changed while Knitting. A Flipped Row keeps
+// its direction across the change: it was set to correct exactly this rule.
 for (const control of [constructionChoice, startChoice]) {
   control.addEventListener("change", () => {
     reading = chosenReading(reading.flips);
@@ -245,6 +333,93 @@ overview.addEventListener("click", (event) => {
   selected = rowNumber(chart, Math.min(Math.max(index, 0), rowCount(chart) - 1));
   drawRow();
 });
+
+// Free pan and pinch over the whole Chart. One gesture, not two: a finger
+// dragging and two fingers pinching are the same sum — keep whatever the
+// fingers landed on under the fingers — so both fall out of one formula, with
+// the pinch contributing a scale factor of 1 while there is only one finger.
+const touching = new Map();
+let grip = null; // where the fingers were on the previous move
+
+viewport.addEventListener("pointerdown", (event) => {
+  viewport.setPointerCapture(event.pointerId);
+  touching.set(event.pointerId, event);
+  grip = gripNow();
+});
+
+viewport.addEventListener("pointermove", (event) => {
+  if (!touching.has(event.pointerId)) return;
+  touching.set(event.pointerId, event);
+  const now = gripNow();
+  const pinched = grip.spread && now.spread ? now.spread / grip.spread : 1;
+  const scale = Math.min(Math.max(view.scale * pinched, fitsWhole()), MAX_ZOOM);
+  const grew = scale / view.scale;
+  view = {
+    scale,
+    x: now.x - grew * (grip.x - view.x),
+    y: now.y - grew * (grip.y - view.y),
+  };
+  grip = now;
+  applyView();
+});
+
+for (const finished of ["pointerup", "pointercancel"]) {
+  viewport.addEventListener(finished, (event) => {
+    touching.delete(event.pointerId);
+    grip = gripNow(); // lifting one finger of a pinch must not throw the Chart across the screen
+  });
+}
+
+/** Where the fingers are: their centre in the viewport, and how far apart they are. */
+function gripNow() {
+  const points = [...touching.values()];
+  if (!points.length) return { x: 0, y: 0, spread: 0 };
+  const box = viewport.getBoundingClientRect();
+  const centre = (of) => points.reduce((total, point) => total + of(point), 0) / points.length;
+  const [first, second] = points;
+  return {
+    x: centre((point) => point.clientX) - box.left,
+    y: centre((point) => point.clientY) - box.top,
+    spread: second ? Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY) : 0,
+  };
+}
+
+/** Review is a survey, so it opens on the whole Chart, however tall that is. */
+function resetView() {
+  view = { scale: fitsWhole(), x: 0, y: 0 };
+  applyView();
+}
+
+/**
+ * The zoom that fits the whole Chart in the viewport, and the floor the pinch
+ * stops at. Fit-width is not it: the narrowest corpus chart is eight Cells
+ * across and forty times as tall, so fit-width shows a fortieth of it.
+ */
+function fitsWhole() {
+  const fits = viewport.clientHeight / pannable.offsetHeight;
+  return fits > 0 && fits < 1 ? fits : 1; // a Chart shorter than the viewport is whole at fit-width
+}
+
+/** Move the Chart, keeping it over the viewport: panning off into blank space loses the knitter. */
+function applyView() {
+  const [width, height] = [viewport.clientWidth, viewport.clientHeight];
+  // fit-width at scale 1, so the content is one viewport wide before the zoom
+  view.x = middleOr(width, view.scale * width, view.x);
+  view.y = middleOr(height, view.scale * pannable.offsetHeight, view.y);
+  pannable.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
+}
+
+/** An offset that keeps the content covering the viewport — or centred, when it is smaller. */
+function middleOr(viewportSize, contentSize, offset) {
+  if (contentSize <= viewportSize) return (viewportSize - contentSize) / 2;
+  return Math.min(0, Math.max(offset, viewportSize - contentSize));
+}
+
+// A phone turned on its side is a different viewport, and the Chart must not be
+// left panned into the blank space that was the rest of the screen.
+new ResizeObserver(() => {
+  if (mode === REVIEW) applyView();
+}).observe(viewport);
 
 /** Dim everything outside the rectangle, then outline it and draw its handles. */
 function drawCrop() {
