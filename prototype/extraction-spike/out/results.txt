@@ -1,0 +1,41 @@
+
+=== STRUCTURAL SCORE (pass/fail; one failure fails the chart) ===
+
+chart                       dims       gt  ok | pal  gt  ok |   skew     pitch x/y
+----------------------------------------------------------------------------------
+112w150h-9colors.png     112x150  112x150 PASS |   9   9  ok |   0.10   8.85/8.85  
+66w55h-2colors.jpg         66x55    66x55 PASS |   2   2  ok |   0.30  25.66/19.00 
+74w38h-2colors.png         74x38    74x38 PASS |   2   2  ok |   0.35  24.92/24.93 
+8w37h-2colors.png           8x37     8x37 PASS |   2   2  ok |  -0.70  41.15/40.57 
+
+=== DIAGNOSTICS (correction burden + free confidence signals) ===
+
+112w150h-9colors.png
+    crop edge slop           : 1.11 cells (EXCEEDS 0.5-cell snap tolerance -> miscount)
+    palette merge            : plateau 9 (widest run 5.5 dE) vs fixed dE3->127, dE10->32
+    within-cell spread (conf): median MAD 0.58  | assign margin dE 13.5
+    dft peak strength x/y    : 0.012 / 0.007
+    cost                     : 10095 ms, peak 176 MB
+
+66w55h-2colors.jpg
+    crop edge slop           : 0.38 cells (snapping absorbed it)
+    palette merge            : plateau 2 (widest run 34.5 dE) vs fixed dE3->5, dE10->2
+    within-cell spread (conf): median MAD 0.00  | assign margin dE 63.5
+    dft peak strength x/y    : 0.014 / 0.015
+    cost                     : 7667 ms, peak 99 MB
+
+74w38h-2colors.png
+    crop edge slop           : 1.24 cells (EXCEEDS 0.5-cell snap tolerance -> miscount)
+    palette merge            : plateau 2 (widest run 15.5 dE) vs fixed dE3->15, dE10->6
+    within-cell spread (conf): median MAD 5.19  | assign margin dE 42.7
+    dft peak strength x/y    : 0.021 / 0.033
+    cost                     : 6288 ms, peak 98 MB
+
+8w37h-2colors.png
+    crop edge slop           : 0.56 cells (EXCEEDS 0.5-cell snap tolerance -> miscount)
+    palette merge            : plateau 2 (widest run 15.5 dE) vs fixed dE3->49, dE10->9
+    within-cell spread (conf): median MAD 4.75  | assign margin dE 33.9
+    dft peak strength x/y    : 0.028 / 0.014
+    cost                     : 1555 ms, peak 27 MB
+
+Reconstructions written to out/*.recon.png — eyeball vs originals for cell burden.

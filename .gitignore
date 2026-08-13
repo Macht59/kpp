@@ -1,0 +1,30 @@
+# NOTE: .scratch/ is deliberately NOT ignored — it is this repo's issue tracker
+# (the wayfinder map and its tickets live there). See docs/agents/issue-tracker.md.
+
+# Python — parsing service
+__pycache__/
+*.py[cod]
+.venv/
+.venv-spike/
+venv/
+
+# extraction spike — throwaway working files (keep out/, the linked assets)
+prototype/extraction-spike/thumbs/
+*.egg-info/
+.pytest_cache/
+
+# Node — web client
+node_modules/
+dist/
+build/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+tests/examples/*.png
+tests/examples/*.jpg
