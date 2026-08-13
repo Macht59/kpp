@@ -64,6 +64,11 @@ export function rowCount(chart) {
   return chart.cells.length;
 }
 
+/** How wide the Chart is. Stated from `cells`, which is the Chart that gets knitted. */
+export function colCount(chart) {
+  return chart.cells[0].length;
+}
+
 /** A Row's Cells, left to right in image orientation. */
 export function cellsOfRow(chart, row) {
   return chart.cells[rowIndex(chart, row)];
@@ -82,10 +87,42 @@ export function runsOfRow(chart, row, direction) {
     throw new Error(`reading direction must be given, not ${direction}`);
   const runs = [];
   let open = null; // the Run being counted; null across a Non-stitch gap
-  for (const cell of cellsOfRow(chart, row)) {
+  cellsOfRow(chart, row).forEach((cell, at) => {
     if (cell === NON_STITCH) open = null;
     else if (open?.entry === cell) open.count += 1;
-    else runs.push((open = { entry: cell, count: 1 }));
-  }
+    // `at` is in image orientation, unreversed, so the chip showing a Run can
+    // hand the same Cells to Repaint whichever way the Row is read.
+    else runs.push((open = { entry: cell, count: 1, at }));
+  });
   return direction === RIGHT_TO_LEFT ? runs.reverse() : runs;
+}
+
+/**
+ * A Row's span of Cells — `from` to `to` inclusive, in either order, because a
+ * knitter drags both ways — set to a Palette entry or to Non-stitch. One
+ * primitive at two selection sizes: a single Cell is the span `from === to`.
+ *
+ * The Chart comes back as a new value rather than a mutation, so a Repaint mid
+ * drag can be recomputed from the Chart as it was when the finger went down.
+ * Indices outside the Chart are refused: clamping them would paint Cells the
+ * knitter never touched, and do it quietly.
+ */
+export function repaint(chart, { row, from, to }, entry) {
+  // Integers, not merely in range: Row 1.5 is no Row, and would otherwise come
+  // back as a Chart with nothing painted — the quiet failure this guard is for.
+  if (!Number.isInteger(row) || row < 1 || row > rowCount(chart))
+    throw new Error(`no Row ${row} in this Chart`);
+  const [first, last] = from <= to ? [from, to] : [to, from];
+  if (!Number.isInteger(first) || !Number.isInteger(last) || first < 0 || last >= colCount(chart))
+    throw new Error(`cells ${first}–${last} are outside this Chart`);
+  if (entry !== NON_STITCH && !(entry >= 0 && entry < chart.palette.length))
+    throw new Error(`no Palette entry ${entry} in this Chart`);
+
+  const index = rowIndex(chart, row);
+  return {
+    ...chart,
+    cells: chart.cells.map((cells, r) =>
+      r === index ? cells.map((cell, c) => (c >= first && c <= last ? entry : cell)) : cells,
+    ),
+  };
 }

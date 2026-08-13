@@ -11,6 +11,7 @@ import {
   cropIsDoubtful,
   entryLabel,
   readingDirection,
+  repaint,
   rowCount,
   rowIndex,
   rowNumber,
@@ -151,6 +152,84 @@ test("right-to-left reverses the Runs, and never touches the Chart", () => {
 
 test("Runs asked for without a direction are refused rather than read one way", () => {
   assert.throws(() => runsOfRow(CHART, 1), /reading direction must be given/);
+});
+
+test("a Run says where it starts, so the chip showing it can Repaint it", () => {
+  // Positions are in image orientation, unreversed, so they mean the same Cells
+  // whichever way the Row is read.
+  const row = rowOf([0, 0, 0, 1, 1, 2]);
+  assert.deepEqual(
+    runsOfRow(row, 1, LEFT_TO_RIGHT).map(({ at, count }) => [at, count]),
+    [
+      [0, 3],
+      [3, 2],
+      [5, 1],
+    ],
+  );
+  assert.deepEqual(
+    runsOfRow(row, 1, RIGHT_TO_LEFT).map(({ at, count }) => [at, count]),
+    [
+      [5, 1],
+      [3, 2],
+      [0, 3],
+    ],
+  );
+  // and across a Non-stitch gap the second Run starts after it, not at the split
+  assert.deepEqual(
+    runsOfRow(rowOf([1, -1, 1]), 1, LEFT_TO_RIGHT).map(({ at }) => at),
+    [0, 2],
+  );
+});
+
+test("Repainting one Cell changes that Cell and nothing else", () => {
+  const painted = repaint(CHART, { row: 1, from: 2, to: 2 }, 2);
+  assert.deepEqual(cellsOfRow(painted, 1), [0, 1, 2, 1, 0, 1]);
+  assert.deepEqual(cellsOfRow(painted, 2), cellsOfRow(CHART, 2));
+  assert.deepEqual(cellsOfRow(painted, 3), cellsOfRow(CHART, 3));
+});
+
+test("Repainting a span takes the whole span, dragged either way", () => {
+  assert.deepEqual(cellsOfRow(repaint(CHART, { row: 1, from: 1, to: 4 }, 0), 1), [0, 0, 0, 0, 0, 1]);
+  // a knitter dragging right to left hands the ends over backwards
+  assert.deepEqual(cellsOfRow(repaint(CHART, { row: 1, from: 4, to: 1 }, 0), 1), [0, 0, 0, 0, 0, 1]);
+});
+
+test("Repaint returns a new Chart rather than mutating the one it was given", () => {
+  const before = structuredClone(CHART);
+  const painted = repaint(CHART, { row: 1, from: 0, to: 5 }, 2);
+  assert.deepEqual(CHART, before); // the Chart a caller still holds does not change under it
+  assert.notEqual(painted, CHART);
+  assert.notEqual(painted.cells, CHART.cells);
+  assert.notEqual(painted.cells[2], CHART.cells[2]);
+  assert.equal(painted.cells[0], CHART.cells[0]); // untouched Rows are shared, not copied
+});
+
+test("Repainting so two neighbouring Runs share a colour merges them in the next Readout", () => {
+  // the stray one-Cell chip the spec leans on: [0,1,0] mid-Row reads as three
+  const strayed = rowOf([1, 1, 0, 1, 1]);
+  assert.equal(runsOfRow(strayed, 1, LEFT_TO_RIGHT).length, 3);
+  const merged = repaint(strayed, { row: 1, from: 2, to: 2 }, 1);
+  assert.deepEqual(counted(runsOfRow(merged, 1, LEFT_TO_RIGHT)), [{ entry: 1, count: 5 }]);
+});
+
+test("Repainting Non-stitch back to yarn joins the Runs it was splitting", () => {
+  const merged = repaint(rowOf([1, -1, 1]), { row: 1, from: 1, to: 1 }, 1);
+  assert.deepEqual(counted(runsOfRow(merged, 1, LEFT_TO_RIGHT)), [{ entry: 1, count: 3 }]);
+});
+
+test("Repainting outside the Chart is refused rather than silently clamped", () => {
+  // clamping would paint Cells the knitter never touched, and quietly
+  assert.throws(() => repaint(CHART, { row: 0, from: 0, to: 0 }, 1), /Row 0/);
+  assert.throws(() => repaint(CHART, { row: 4, from: 0, to: 0 }, 1), /Row 4/);
+  assert.throws(() => repaint(CHART, { row: 1.5, from: 0, to: 0 }, 1), /Row 1.5/); // in range, still no Row
+  assert.throws(() => repaint(CHART, { row: 1, from: 0.5, to: 2 }, 1), /outside/);
+  assert.throws(() => repaint(CHART, { row: 1, from: -1, to: 2 }, 1), /outside/);
+  assert.throws(() => repaint(CHART, { row: 1, from: 4, to: 6 }, 1), /outside/);
+  assert.throws(() => repaint(CHART, { row: 1, from: 0, to: 0 }, 3), /Palette entry 3/);
+  // -1 is a Cell value, never a Palette entry, so it is paintable
+  assert.deepEqual(cellsOfRow(repaint(CHART, { row: 1, from: 0, to: 0 }, -1), 1), [
+    -1, 1, 0, 1, 0, 1,
+  ]);
 });
 
 test("only a crop near the coin flip is doubtful, and a Chart without the signal never is", () => {

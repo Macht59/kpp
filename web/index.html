@@ -38,13 +38,17 @@
     outline: 2px solid #c0392b; background: #c0392b40;
   }
   #readout { display: flex; flex-wrap: wrap; gap: 0.5rem; list-style: none; margin: 0; padding: 0; }
-  #readout li {
-    display: flex; align-items: center; gap: 0.5rem;
+  #readout .chip {
+    display: flex; align-items: center; gap: 0.5rem; width: auto;
     min-height: 44px; padding: 0 0.7rem; /* 44 px: tappable, not merely readable */
     border: 1px solid currentColor; border-radius: 0.5rem;
     font-variant-numeric: tabular-nums;
   }
   .swatch { width: 28px; height: 28px; border: 1px solid currentColor; border-radius: 0.25rem; }
+  /* Two pickers, one primitive: the Palette bar arms a Repaint in Review, and
+     the same buttons under a tapped Run chip repaint it in Knit. */
+  #palette button, #chip-palette button { width: 44px; height: 44px; padding: 0; }
+  [aria-pressed=true], [aria-expanded=true] { outline: 3px solid #c0392b; outline-offset: 2px; }
   /* Knitting a Row backwards is the mistake this bar exists to prevent, so it
      says the direction in an arrow and in words, right under the Row it describes. */
   #direction {
@@ -73,7 +77,8 @@
   #cropped img { display: block; max-width: none; }
   #size { font-size: 1.25rem; }
   #palette-size { margin: 0; font-size: 1.25rem; font-weight: 700; } /* nine entries coming back as seven is silent otherwise */
-  #palette { display: flex; flex-wrap: wrap; gap: 0.4rem; list-style: none; margin: 0; padding: 0; }
+  #palette, #chip-palette { display: flex; flex-wrap: wrap; gap: 0.4rem; list-style: none; margin: 0; padding: 0; }
+  #paint-hint { margin: 0; opacity: 0.8; }
   #doubt { padding: 0.75rem; margin: 0; border: 1px solid #b7791f; border-radius: 0.5rem; color: #b7791f; }
 
   #stage { position: relative; width: fit-content; margin: 0 auto; }
@@ -119,6 +124,7 @@
     <h2 id="size"></h2>
     <p id="palette-size"></p>
     <ul id="palette"></ul>
+    <p id="paint-hint"></p>
     <div id="viewport">
       <div id="pannable">
         <canvas id="review-chart"></canvas>
@@ -139,6 +145,9 @@
     <p id="direction"><span id="arrow"></span><span id="direction-words"></span></p>
     <h2 id="row-label"></h2>
     <ul id="readout"></ul>
+    <!-- A tapped Run chip opens the Palette here: the correction a knitter makes
+         is the one they are looking straight at. -->
+    <ul id="chip-palette" hidden></ul>
     <button id="next">Next row</button>
     <button id="previous">Previous row</button>
     <button id="flip">Flip this row</button>

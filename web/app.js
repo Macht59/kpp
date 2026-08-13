@@ -5,10 +5,12 @@ import {
   FLAT,
   RIGHT_TO_LEFT,
   cellsOfRow,
+  colCount,
   cropIsDoubtful,
   entryLabel,
   opposite,
   readingDirection,
+  repaint,
   rowCount,
   rowIndex,
   rowNumber,
@@ -36,6 +38,8 @@ const doubt = document.getElementById("doubt");
 const size = document.getElementById("size");
 const paletteSize = document.getElementById("palette-size");
 const paletteList = document.getElementById("palette");
+const paintHint = document.getElementById("paint-hint");
+const chipPalette = document.getElementById("chip-palette");
 const viewport = document.getElementById("viewport");
 const pannable = document.getElementById("pannable");
 const reviewChart = document.getElementById("review-chart");
@@ -66,6 +70,9 @@ let selected = 1; // the Row being knitted, numbered from the bottom of the imag
 // Construction and Reading direction are the knitter's, per Chart: the parser
 // cannot supply them, and neither is ever written into `cells`.
 let reading = { construction: FLAT, start: RIGHT_TO_LEFT, flips: {} };
+let picked = null; // the Palette entry armed for Repaint in Review; null when none is
+let painting = null; // the pointer, Row and first Cell of the paint drag in progress
+let openChip = null; // the Run whose chip has the Palette open, in Knit
 let chosen = null;
 let crop = null; // in image pixels, so it survives the image being laid out differently
 let anchor = null; // the corner held still for the drag in progress
@@ -164,12 +171,11 @@ function show(parsed) {
   chart = parsed;
   selected = 1;
   reading = chosenReading({});
-  drawCells(wholeChart, chart.cells);
-  drawCells(reviewChart, chart.cells);
+  picked = null;
   reviewImage.src = source.src;
   frameTheImage();
   showImage(false);
-  drawRow();
+  redraw();
   drawFacts();
   setMode(REVIEW);
 }
@@ -198,18 +204,52 @@ function drawFacts() {
   // Stated from `cells` rather than from `dimensions`: the contract declares
   // both and they agree, but only one of them is the Chart that gets knitted.
   const entries = chart.palette.length;
-  size.textContent = `${rowCount(chart)} rows × ${chart.cells[0].length} columns`;
+  size.textContent = `${rowCount(chart)} rows × ${colCount(chart)} columns`;
   paletteSize.textContent = `${entries} ${entries === 1 ? "colour" : "colours"}`;
-  paletteList.replaceChildren(...chart.palette.map(dot));
+  paletteList.replaceChildren(
+    ...chart.palette.map((colour, entry) => pickable(colour, entry, arm)),
+  );
+  chipPalette.replaceChildren(
+    ...chart.palette.map((colour, entry) => pickable(colour, entry, paintRun)),
+  );
   doubt.hidden = !cropIsDoubtful(chart);
+  showArmed();
 }
 
-/** One Palette entry, so the count is something the eye catches rather than reads. */
-function dot(entry) {
+/**
+ * One Palette entry: the count of entries the eye catches rather than reads, and
+ * the handle both Repaints hang off — armed in Review, tapped under a chip in Knit.
+ */
+function pickable(colour, entry, choose) {
   const item = document.createElement("li");
-  item.className = "swatch";
-  item.style.background = rgb(entry.rgb);
+  const button = document.createElement("button");
+  button.className = "swatch";
+  button.style.background = rgb(colour.rgb);
+  button.title = entryLabel(chart, entry);
+  button.setAttribute("aria-label", button.title);
+  button.addEventListener("click", () => choose(entry));
+  item.append(button);
   return item;
+}
+
+/**
+ * Repaint in Review is Palette-bar-first: arm an entry, then tap a Cell or drag
+ * across several. Arming the armed entry disarms it, which is also how the
+ * knitter hands one-finger gestures back to pan.
+ */
+function arm(entry) {
+  picked = picked === entry ? null : entry;
+  showArmed();
+}
+
+function showArmed() {
+  for (const [index, button] of [...paletteList.querySelectorAll("button")].entries())
+    button.setAttribute("aria-pressed", String(index === picked));
+  paintHint.textContent =
+    picked === null
+      ? "Tap a colour to correct cells with it. Drag with one finger to pan, two to zoom."
+      : `Painting ${entryLabel(chart, picked)} — tap a cell, or drag across several. ` +
+        "Tap the colour again to pan instead.";
 }
 
 compare.addEventListener("click", () => showImage(cropped.hidden));
@@ -223,7 +263,7 @@ compare.addEventListener("click", () => showImage(cropped.hidden));
 function frameTheImage() {
   const [x, y, w] = chart.source.crop;
   const zoom = chart.source.image_width / w; // the crop, whatever its size, fills the window
-  cropped.style.aspectRatio = `${chart.cells[0].length} / ${rowCount(chart)}`;
+  cropped.style.aspectRatio = `${colCount(chart)} / ${rowCount(chart)}`;
   reviewImage.style.width = `${zoom * 100}%`;
   // percentage margins resolve against the window's width, which is the crop's width
   reviewImage.style.marginLeft = `${(-x * 100) / w}%`;
@@ -257,19 +297,54 @@ function drawRow() {
   }`;
 
   rowLabel.textContent = `Row ${selected} of ${rows} — ${stitches} stitches`;
+  openChip = null; // a Row that has moved under the picker is not the Run it was opened for
   readout.replaceChildren(...runs.map(chip));
+  showOpenChip();
   previous.disabled = selected === 1;
   next.disabled = selected === rows;
 }
 
-/** One Run: a swatch and a Cell count, big enough to hit. */
-function chip({ entry, count }) {
+/** One Run: a swatch and a Cell count, big enough to hit — and tapping it Repaints it. */
+function chip(run) {
   const item = document.createElement("li");
+  const button = document.createElement("button");
   const swatch = document.createElement("span");
+  button.className = "chip";
+  button.dataset.at = run.at;
+  button.setAttribute("aria-controls", chipPalette.id);
   swatch.className = "swatch";
-  swatch.style.background = rgb(chart.palette[entry].rgb);
-  item.append(swatch, `${count} ${entryLabel(chart, entry)}`);
+  swatch.style.background = rgb(chart.palette[run.entry].rgb);
+  button.append(swatch, `${run.count} ${entryLabel(chart, run.entry)}`);
+  button.addEventListener("click", () => {
+    openChip = openChip?.at === run.at ? null : run;
+    showOpenChip();
+  });
+  item.append(button);
   return item;
+}
+
+/** The Palette below the Readout, open for the tapped chip or shut. */
+function showOpenChip() {
+  chipPalette.hidden = !openChip;
+  for (const button of readout.querySelectorAll("button"))
+    button.setAttribute("aria-expanded", String(Number(button.dataset.at) === openChip?.at));
+}
+
+/**
+ * Knit's Repaint: the whole Run the tapped chip stands for, in the Selected Row
+ * and no other — the chips are that Row's, so there is no other Row to reach.
+ */
+function paintRun(entry) {
+  const { at, count } = openChip;
+  chart = repaint(chart, { row: selected, from: at, to: at + count - 1 }, entry);
+  redraw();
+}
+
+/** Every view of the Cells, after a Repaint has given us a new Chart. */
+function redraw() {
+  drawCells(reviewChart, chart.cells);
+  drawCells(wholeChart, chart.cells);
+  drawRow();
 }
 
 /** Draw Cells one canvas pixel each; CSS stretches them to whatever width the phone has. */
@@ -284,6 +359,17 @@ function drawCells(canvas, cells) {
       context.fillRect(c, r, 1, 1);
     }),
   );
+}
+
+/** One array Row's Cells, over whatever was drawn there before. */
+function drawRowOfCells(canvas, index) {
+  const context = canvas.getContext("2d");
+  chart.cells[index].forEach((cell, c) => {
+    context.clearRect(c, index, 1, 1); // Non-stitch is transparent, so painting over is not enough
+    if (cell < 0) return;
+    context.fillStyle = rgb(chart.palette[cell].rgb);
+    context.fillRect(c, index, 1, 1);
+  });
 }
 
 const rgb = ([red, green, blue]) => `rgb(${red} ${green} ${blue})`;
@@ -328,9 +414,7 @@ flip.addEventListener("click", () => {
 
 // Tapping a Row in the overview jumps to it — losing your place is recoverable.
 overview.addEventListener("click", (event) => {
-  const box = wholeChart.getBoundingClientRect();
-  const index = Math.floor(((event.clientY - box.top) / box.height) * rowCount(chart));
-  selected = rowNumber(chart, Math.min(Math.max(index, 0), rowCount(chart) - 1));
+  selected = cellAt(wholeChart, event).row;
   drawRow();
 });
 
@@ -345,9 +429,19 @@ viewport.addEventListener("pointerdown", (event) => {
   viewport.setPointerCapture(event.pointerId);
   touching.set(event.pointerId, event);
   grip = gripNow();
+  // With an entry armed, one finger on the Chart paints. A second finger is a
+  // pinch, so it ends the paint and the fingers zoom: Repaint takes the one
+  // gesture pan can spare, and never the one it cannot.
+  painting = null;
+  if (armedToPaint() && touching.size === 1 && over(reviewChart, event)) {
+    const { row, col } = cellAt(reviewChart, event);
+    painting = { pointer: event.pointerId, row, from: col, base: chart };
+    paintTo(col);
+  }
 });
 
 viewport.addEventListener("pointermove", (event) => {
+  if (painting?.pointer === event.pointerId) return paintTo(cellAt(reviewChart, event).col);
   if (!touching.has(event.pointerId)) return;
   touching.set(event.pointerId, event);
   const now = gripNow();
@@ -365,9 +459,58 @@ viewport.addEventListener("pointermove", (event) => {
 
 for (const finished of ["pointerup", "pointercancel"]) {
   viewport.addEventListener(finished, (event) => {
+    if (painting?.pointer === event.pointerId) {
+      painting = null;
+      redraw(); // the drag only kept the Chart in front of the knitter up to date
+    }
     touching.delete(event.pointerId);
     grip = gripNow(); // lifting one finger of a pinch must not throw the Chart across the screen
   });
+}
+
+/** Repaint is armed only over the Chart itself: the image beside it is not paintable. */
+const armedToPaint = () => mode === REVIEW && picked !== null && cropped.hidden;
+
+/**
+ * Whether a pointer is on a canvas at all. The Chart is centred when it is
+ * shorter than the viewport, so there is blank band either side of it — and a
+ * clamped tap there would paint an edge Cell the knitter never touched.
+ */
+function over(canvas, event) {
+  const box = canvas.getBoundingClientRect();
+  return (
+    event.clientX >= box.left &&
+    event.clientX <= box.right &&
+    event.clientY >= box.top &&
+    event.clientY <= box.bottom
+  );
+}
+
+/** Which Cell a pointer is over, clamped: a drag off the edge paints up to it. */
+function cellAt(canvas, event) {
+  const box = canvas.getBoundingClientRect();
+  const rows = rowCount(chart);
+  const cols = colCount(chart);
+  const at = (fraction, count) => Math.min(Math.max(Math.floor(fraction * count), 0), count - 1);
+  return {
+    row: rowNumber(chart, at((event.clientY - box.top) / box.height, rows)),
+    col: at((event.clientX - box.left) / box.width, cols),
+  };
+}
+
+/**
+ * The span from where the finger went down to where it is now, painted from the
+ * Chart as it was then — so a drag that doubles back leaves painted only what
+ * the finger is currently over. The Row is the one the drag started in: a hand
+ * that wanders up a Row must not repaint that one too.
+ *
+ * Only the Row that changed is redrawn, and only on the canvas the knitter is
+ * looking at: a full redraw is 112×150 Cells twice plus a rebuilt Readout, per
+ * pointer move, for one Row's worth of difference.
+ */
+function paintTo(col) {
+  chart = repaint(painting.base, { row: painting.row, from: painting.from, to: col }, picked);
+  drawRowOfCells(reviewChart, rowIndex(chart, painting.row));
 }
 
 /** Where the fingers are: their centre in the viewport, and how far apart they are. */

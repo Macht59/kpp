@@ -37,6 +37,14 @@ and the count of entries is the only defence against a Palette that merged
 silently. A crop the parser was unsure of adds a banner. *Knit this chart*
 leaves Review; *Review this parse* comes back, at any Row, at any time.
 
+Correcting a Cell the parser got wrong is one operation with two handles. In
+Review, tap a Palette swatch to arm it, then tap a Cell or drag across a span —
+arming it is what claims the one-finger gesture, tapping it again hands that back
+to pan, and a second finger ends the paint and pinches. In Knit, tap the Run chip you
+are looking at and pick an entry, which repaints that whole Run of the Selected
+Row. Repainting a stray Cell back to its neighbours' colour merges the three
+chips into one on the next Readout.
+
 Which way a Row is read follows the garment's Construction: flat turns the work
 every Row so the direction alternates, in the round never turns so it holds, and
 a single Row can be Flipped when the alternation slips. Both are the knitter's
