@@ -7,6 +7,7 @@
 <style>
   :root { color-scheme: light dark; --gap: 1rem; }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; } /* author display: block would otherwise win */
   body {
     margin: 0; padding: var(--gap);
     font: 1rem/1.4 system-ui, sans-serif;
@@ -22,7 +23,10 @@
   button[disabled] { opacity: 0.4; cursor: default; }
   input[type=file] { display: none; }
   img, canvas { display: block; max-width: 100%; margin: 0 auto; }
-  canvas { image-rendering: pixelated; }
+  #chart { image-rendering: pixelated; }
+  #stage { position: relative; width: fit-content; margin: 0 auto; }
+  #overlay { position: absolute; inset: 0; touch-action: none; }
+  #hint { margin: 0; text-align: center; opacity: 0.8; }
   #status { text-align: center; animation: pulse 1.4s ease-in-out infinite; }
   #error { padding: 0.75rem; border: 1px solid #c0392b; border-radius: 0.5rem; color: #c0392b; }
   @keyframes pulse { 50% { opacity: 0.35; } }
@@ -37,7 +41,15 @@
     <input id="file" type="file" accept="image/*">
   </label>
 
-  <img id="source" alt="The chart image you chose" hidden>
+  <p id="hint">Drag a rectangle around the grid. Keep the row and column numbers
+    outside it, or the Chart comes out the wrong size.</p>
+
+  <div id="stage" hidden>
+    <img id="source" alt="The chart image you chose">
+    <canvas id="overlay"></canvas>
+  </div>
+
+  <button id="rectangle" disabled>Parse the rectangle</button>
   <button id="whole" disabled>Use whole image</button>
 
   <p id="status" role="status" hidden></p>

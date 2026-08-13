@@ -22,11 +22,20 @@ python -m venv .venv && .venv/bin/pip install -r requirements.txt
 ## The app
 
 `python server.py` serves the client and the parse endpoint from one process on
-`http://localhost:8000`, same-origin. Pick a chart image, tap *use whole image*,
-and the parsed Chart is drawn on a canvas.
+`http://localhost:8000`, same-origin. Pick a chart image, drag a rectangle around
+the grid — the number gutters have to stay outside it, or the Cell count comes
+out wrong — and the parsed Chart is drawn on a canvas. *Use whole image* is the
+shortcut for a screenshot that is already cropped.
 
 The client is plain ES modules and a canvas in `web/` — no build step, per
-[ADR-0004](docs/adr/0004-vanilla-canvas-pwa-client.md). `POST /api/parse` takes
+[ADR-0004](docs/adr/0004-vanilla-canvas-pwa-client.md). Its pure logic is tested
+under Node's own runner, a test-time requirement and never a build step:
+
+```bash
+node --test "web/*.test.js"
+```
+
+`POST /api/parse` takes
 the image as a multipart upload plus the crop as `x, y, w, h`, and returns the
 schema-1 Chart. A parser `ValueError` comes back as a 400 carrying the parser's
 own message, because every one of them is something the knitter can act on; an
