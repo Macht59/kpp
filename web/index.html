@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Knitting Pattern Parser</title>
+<!-- Installed to the home screen, this opens without browser chrome, and every
+     chart already parsed is readable with no connection. -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.png" type="image/png">
+<!-- A PNG rather than an SVG because iOS ignores an SVG here and puts a
+     screenshot of the page on the home screen instead. -->
+<link rel="apple-touch-icon" href="icon.png">
+<meta name="theme-color" content="#c0392b">
 <style>
   :root { color-scheme: light dark; --gap: 1rem; }
   * { box-sizing: border-box; }

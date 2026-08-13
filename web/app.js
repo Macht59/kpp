@@ -27,6 +27,9 @@ const MAX_ZOOM = 20; // 3.2 px per Cell fit-width on the widest corpus chart, so
 const REVIEW = "review";
 const KNIT = "knit";
 const REPARSED = " (re-parse)"; // so two crops of one image are two names in the library
+const OFFLINE =
+  "Parsing needs a connection, and there isn't one. Charts you have already " +
+  "parsed work offline — knitting from one needs nothing.";
 
 const file = document.getElementById("file");
 const stage = document.getElementById("stage");
@@ -183,6 +186,11 @@ async function parseAndDraw(rect) {
 
 /** POST the image and the crop; give up after PARSE_TIMEOUT_MS. */
 async function parse(image, { x, y, w, h }) {
+  // Said before the upload rather than after it times out: parsing is the one
+  // thing here that needs a connection, and a knitter offline in a chair should
+  // hear that in a sentence rather than watch a spinner fail.
+  if (!navigator.onLine) throw new Error(OFFLINE);
+
   const body = new FormData();
   body.append("image", image, image.name ?? chartName);
   for (const [field, value] of Object.entries({ x, y, w, h })) body.append(field, value);
@@ -198,7 +206,10 @@ async function parse(image, { x, y, w, h }) {
     throw new Error(
       failure.name === "TimeoutError"
         ? "Parsing took longer than 30 seconds. Check your connection and try again."
-        : "Could not reach the parser. Parsing needs a connection.",
+        // Not OFFLINE: the device says it is online, so the parser is down or
+        // unreachable, and telling the knitter to check a connection they have
+        // sends them to fix the wrong thing.
+        : "Could not reach the parser. Parsing needs a connection to it.",
     );
   }
   const chart = await response.json().catch(() => ({}));
@@ -870,3 +881,8 @@ function say(element, message) {
 // evicted: a browser that clears storage under pressure does it without asking.
 askToKeep();
 drawLibrary();
+
+// The shell, onto the device, so the app opens where the knitting happens. A
+// registration that fails — an old browser, or the page opened over file:// —
+// costs the offline case and nothing else, so the app carries on without it.
+navigator.serviceWorker?.register("/sw.js").catch(() => {});

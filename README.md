@@ -77,6 +77,15 @@ and one tap must not be able to destroy an evening of them. Both sit in the
 library, each stating its dimensions, until the knitter deletes the worse crop.
 Uploading another image is how a chart that will not parse at all is abandoned.
 
+The app installs to the home screen and opens without browser chrome, and a
+service worker keeps the shell on the device, so it starts with no connection —
+on a train, or in a chair away from wifi. Every Chart already parsed is fully
+usable there: open it from the library, Select a Row, read it, advance, and
+Repaint a Cell the parser got wrong. Parsing is the one thing that needs the
+network, and it says so in a sentence rather than failing obscurely. There is no
+background-sync queue to retry an offline upload later, because a knitter parses
+a Chart once, at a table, on wifi.
+
 The client is plain ES modules and a canvas in `web/` — no build step, per
 [ADR-0004](docs/adr/0004-vanilla-canvas-pwa-client.md). Its pure logic is tested
 under Node's own runner, a test-time requirement and never a build step:
