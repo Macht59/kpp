@@ -67,6 +67,16 @@ can have. A Chart saved by a newer release of the app is refused on load rather
 than mis-read, since a later `schema_version` could move Cells under the same
 field names.
 
+A Chart that came back the wrong size cannot be corrected Cell by Cell — the
+crop caught a number gutter, or missed a Row — so Review can **Re-parse**: the
+stored image goes back on the crop step under the rectangle it was parsed with,
+and the knitter adjusts it and parses again. *Start over* is the same path from
+a blank rectangle. What comes back is a **new Chart beside the old one**, never
+over it: a re-grid changes which Cell is which and so discards every Repaint,
+and one tap must not be able to destroy an evening of them. Both sit in the
+library, each stating its dimensions, until the knitter deletes the worse crop.
+Uploading another image is how a chart that will not parse at all is abandoned.
+
 The client is plain ES modules and a canvas in `web/` — no build step, per
 [ADR-0004](docs/adr/0004-vanilla-canvas-pwa-client.md). Its pure logic is tested
 under Node's own runner, a test-time requirement and never a build step:

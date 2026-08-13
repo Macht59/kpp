@@ -26,6 +26,7 @@ const HANDLE_CSS_PX = 11; // drawn radius; grabbed at twice that, a 44 px target
 const MAX_ZOOM = 20; // 3.2 px per Cell fit-width on the widest corpus chart, so 20x is a fat Cell
 const REVIEW = "review";
 const KNIT = "knit";
+const REPARSED = " (re-parse)"; // so two crops of one image are two names in the library
 
 const file = document.getElementById("file");
 const stage = document.getElementById("stage");
@@ -49,6 +50,8 @@ const reviewChart = document.getElementById("review-chart");
 const cropped = document.getElementById("cropped");
 const reviewImage = document.getElementById("review-image");
 const compare = document.getElementById("compare");
+const reparse = document.getElementById("reparse");
+const startOver = document.getElementById("start-over");
 const settings = document.getElementById("settings");
 const knit = document.getElementById("knit");
 const wholeChart = document.getElementById("whole-chart");
@@ -81,25 +84,53 @@ let reading = { construction: FLAT, start: RIGHT_TO_LEFT, flips: {} };
 let picked = null; // the Palette entry armed for Repaint in Review; null when none is
 let painting = null; // the pointer, Row and first Cell of the paint drag in progress
 let openChip = null; // the Run whose chip has the Palette open, in Knit
-let chosen = null;
-let storedImageUrl = null; // the stored source image, held only while its Chart is on screen
+let chosen = null; // the image being parsed from — a chosen file, or a stored one for a Re-parse
+let chartName = null; // what the next parse will be kept under
+let imageUrl = null; // that image, drawn on the crop step and compared against in Review
 let crop = null; // in image pixels, so it survives the image being laid out differently
 let anchor = null; // the corner held still for the drag in progress
 let before = null; // the crop as it was when that drag started
 
+// Uploading another image is how a knitter abandons a chart that will not parse
+// at all, so it is the same control as the first upload and it is always there.
 file.addEventListener("change", () => {
-  chosen = file.files[0] ?? null;
-  crop = null;
+  const image = file.files[0];
+  // Cleared, so choosing the same file again is a change again: a knitter
+  // abandoning a parse often reaches for the image they just uploaded.
+  file.value = "";
+  if (image) cropAgain(image, image.name, null);
+});
+
+/**
+ * Put an image on the crop step: a newly chosen file with no rectangle yet, or
+ * one already on the device with the rectangle its Chart was parsed from. What
+ * was on screen goes away — the knitter is parsing now, not reviewing — but
+ * nothing is written over: the parse that lands is kept as a Chart of its own.
+ */
+function cropAgain(image, name, rect) {
+  chosen = image;
+  chartName = name;
+  crop = rect;
+  anchor = before = null;
   say(status, null);
   say(error, null);
   setMode(null);
-  stage.hidden = !chosen;
-  whole.disabled = !chosen;
-  rectangle.disabled = true;
-  if (chosen) source.src = URL.createObjectURL(chosen);
-});
+  revokeImage();
+  imageUrl = URL.createObjectURL(image);
+  source.src = reviewImage.src = imageUrl;
+  stage.hidden = false;
+  whole.disabled = true; // until the image has loaded: its size is 0 until then
+  rectangle.disabled = !crop;
+  fitOverlay();
+  stage.scrollIntoView({ block: "center" });
+}
 
-source.addEventListener("load", fitOverlay);
+source.addEventListener("load", () => {
+  // The whole image is only a crop once its size is known, and only offered
+  // while the crop step is up — a Chart opened from the library is past it.
+  whole.disabled = stage.hidden;
+  fitOverlay();
+});
 new ResizeObserver(fitOverlay).observe(source);
 
 overlay.addEventListener("pointerdown", (event) => {
@@ -153,7 +184,7 @@ async function parseAndDraw(rect) {
 /** POST the image and the crop; give up after PARSE_TIMEOUT_MS. */
 async function parse(image, { x, y, w, h }) {
   const body = new FormData();
-  body.append("image", image, image.name);
+  body.append("image", image, image.name ?? chartName);
   for (const [field, value] of Object.entries({ x, y, w, h })) body.append(field, value);
 
   let response;
@@ -182,8 +213,6 @@ function show(parsed) {
   selected = 1;
   reading = chosenReading({});
   picked = null;
-  revokeStored();
-  reviewImage.src = source.src;
   frameTheImage();
   showImage(false);
   redraw();
@@ -200,7 +229,7 @@ function show(parsed) {
  */
 async function keepThisChart(mine) {
   try {
-    const id = await keep({ name: chosen.name, image: chosen, chart, selected, reading });
+    const id = await keep({ name: chartName, image: chosen, chart, selected, reading });
     // A parse that landed while this one was being written owns the screen now,
     // and its Cells must not be saved into this Chart's record.
     if (mine === parses) openId = id;
@@ -225,10 +254,10 @@ async function persist() {
   }
 }
 
-/** Let go of the stored image a closed Chart was being compared against. */
-function revokeStored() {
-  if (storedImageUrl) URL.revokeObjectURL(storedImageUrl);
-  storedImageUrl = null;
+/** Let go of the image a closed Chart was cropped from and compared against. */
+function revokeImage() {
+  if (imageUrl) URL.revokeObjectURL(imageUrl);
+  imageUrl = null;
 }
 
 /**
@@ -253,16 +282,19 @@ async function drawLibrary() {
 const fail = (failure) => say(error, failure.message);
 
 /** One Chart on the shelf: its thumbnail and name open it, with rename and delete beside. */
-function shelved({ id, name, thumbnail }) {
+function shelved({ id, name, thumbnail, chart }) {
   const item = document.createElement("li");
   const open = document.createElement("button");
   const picture = document.createElement("img");
+  const title = document.createElement("span");
   const url = URL.createObjectURL(thumbnail);
   picture.src = url;
   picture.alt = "";
   picture.addEventListener("load", () => URL.revokeObjectURL(url));
+  title.className = "title";
+  title.append(name, described(chart));
   open.className = "shelved";
-  open.append(picture, name);
+  open.append(picture, title);
   open.addEventListener("click", () => openChart(id).catch(fail));
   item.append(
     open,
@@ -270,6 +302,20 @@ function shelved({ id, name, thumbnail }) {
     beside("Delete", () => deleteChart(id, name)),
   );
   return item;
+}
+
+/**
+ * The dimensions, under the name in the library. Two Re-parses of one image sit
+ * side by side under names that differ only in a suffix, and the size is the
+ * thing that says which crop was the better one — a Row short is exactly the
+ * error a Re-parse was reached for.
+ */
+function described(chart) {
+  const detail = document.createElement("small");
+  detail.textContent = isReadable(chart)
+    ? `${rowCount(chart)} rows × ${colCount(chart)} columns`
+    : "saved by a newer version of this app";
+  return detail;
 }
 
 function beside(label, act) {
@@ -307,9 +353,20 @@ async function openChart(id) {
   constructionChoice.value = reading.construction;
   startChoice.value = reading.start;
   picked = null;
-  revokeStored();
-  storedImageUrl = URL.createObjectURL(kept.image);
-  reviewImage.src = storedImageUrl;
+  // The image comes off the device with the Chart, so a Re-parse has it to hand
+  // and the knitter is never sent looking for the file they uploaded.
+  chosen = kept.image;
+  chartName = kept.name;
+  revokeImage();
+  imageUrl = URL.createObjectURL(kept.image);
+  source.src = reviewImage.src = imageUrl;
+  // The crop step is where Re-parse goes, not where opening a Chart lands — and
+  // it goes there through `cropAgain`, so both parse buttons are shut here.
+  // Left live, they would parse this Chart's image with the last knitter's
+  // rectangle, and keep what came back as a second Chart of the same name.
+  stage.hidden = true;
+  crop = null;
+  rectangle.disabled = whole.disabled = true;
   frameTheImage();
   showImage(false);
   redraw();
@@ -331,8 +388,11 @@ async function deleteChart(id, name) {
   await forget(id);
   if (openId === id) {
     openId = chart = null;
-    revokeStored();
     setMode(null);
+    // Unless its image is on the crop step: a Re-parse of a Chart the knitter
+    // has just deleted still finishes, and blanking the image under the
+    // rectangle mid-drag would be a strange way to say so.
+    if (stage.hidden) revokeImage();
   }
   await drawLibrary();
 }
@@ -410,6 +470,29 @@ function showArmed() {
 }
 
 compare.addEventListener("click", () => showImage(cropped.hidden));
+
+// A Chart that came back the wrong size cannot be Repainted right — the crop
+// caught a number gutter, or missed a Row — so it is drawn again on the image
+// this Chart was parsed from and parsed again. What comes back is a *new* Chart
+// beside this one: re-gridding changes which Cell is which and discards every
+// Repaint, and one tap must not be able to destroy twenty minutes of them. Both
+// stay in the library until the knitter has seen which crop was better.
+reparse.addEventListener("click", () => {
+  const [x, y, w, h] = chart.source.crop;
+  cropAgain(chosen, reparsed(chartName), { x, y, w, h });
+});
+
+// Starting over is the same path from a blank rectangle, for a parse so wrong
+// there is nothing in the old crop worth adjusting.
+startOver.addEventListener("click", () => cropAgain(chosen, reparsed(chartName), null));
+
+/**
+ * Two crops of one image are two Charts, so they are two names in the library —
+ * and a fourth crop is a fourth name, so the suffix stacks rather than being
+ * added once. It is ugly and it is honest: three of these in the library are
+ * three attempts, and renaming is a tap away for the one that turned out right.
+ */
+const reparsed = (name) => name + REPARSED;
 
 /**
  * The Chart, or the image it was parsed from — shown through a window the shape

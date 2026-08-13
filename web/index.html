@@ -91,6 +91,9 @@
     padding: 0.5rem; text-align: left; overflow-wrap: anywhere;
   }
   #kept img { width: 56px; height: 56px; flex: none; object-fit: contain; margin: 0; }
+  /* The size under the name: two crops of one image differ by little else. */
+  #kept .title { display: flex; flex-direction: column; min-width: 0; }
+  #kept small { font-weight: 400; opacity: 0.8; }
   #kept .beside { width: auto; flex: none; padding: 0.5rem 0.7rem; font-weight: 400; }
   #quota { margin: 0; opacity: 0.8; }
 
@@ -142,7 +145,8 @@
   <section id="review" hidden>
     <p id="doubt" role="status" hidden>The parser was unsure the rectangle
       snapped to the grid, so this chart may be a row or a column out. Check the
-      size below against your pattern, and drag the rectangle again if it is wrong.</p>
+      size below against your pattern, and adjust the crop and parse again if it
+      is wrong.</p>
     <h2 id="size"></h2>
     <p id="palette-size"></p>
     <ul id="palette"></ul>
@@ -156,6 +160,11 @@
       </div>
     </div>
     <button id="compare">Show the image</button>
+    <!-- A wrong size cannot be repainted out, so the crop is drawn again on the
+         stored image. What comes back is a new chart beside this one: a re-grid
+         discards every repaint, and one tap must not destroy them. -->
+    <button id="reparse">Adjust the crop and parse again</button>
+    <button id="start-over">Start over from a blank rectangle</button>
   </section>
 
   <section id="knit" hidden>

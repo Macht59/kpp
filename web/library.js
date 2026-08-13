@@ -89,13 +89,16 @@ export async function remember(id, fields) {
 }
 
 /**
- * Every Chart on the device, most recent first, for the list.
+ * Every Chart on the device, most recent first, for the list — with the Chart
+ * itself, because the list states its dimensions.
  * `ponytail:` reads whole records to list them — split the Cells out if a
  * library of many large Charts ever makes opening the list slow.
  */
 export async function stored() {
   const all = await run([CHARTS], "readonly", (charts) => charts.getAll());
-  return all.result.map(({ id, name, thumbnail }) => ({ id, name, thumbnail })).reverse();
+  return all.result
+    .map(({ id, name, thumbnail, chart }) => ({ id, name, thumbnail, chart }))
+    .reverse();
 }
 
 /** One Chart with its source image, or undefined if it is no longer there. */
