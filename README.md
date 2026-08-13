@@ -51,6 +51,22 @@ a single Row can be Flipped when the alternation slips. Both are the knitter's
 to set — the parser cannot read them, because the gutter numbers they come from
 sit outside the crop — and neither is ever written into `cells`.
 
+A parsed Chart is kept on the device the moment it lands, in a **Chart library**
+of everything the knitter has parsed: the Chart, the image it came from, a
+thumbnail and the name of the file it was uploaded as, which is editable. The
+image is kept because Review's comparison needs it, and because a Re-parse will.
+Opening one goes straight to Knit, at the Row the knitter stopped on and reading
+the way they were reading it — a fresh parse still lands in Review, because
+nothing has checked it yet.
+
+Nothing is ever removed to make room. Persistent storage is asked for before the
+first Chart is written, the space left on the device is shown under the library,
+and a device that fills up says so and waits for the knitter to delete a Chart —
+silent eviction of a Chart that has been corrected is the worst failure this app
+can have. A Chart saved by a newer release of the app is refused on load rather
+than mis-read, since a later `schema_version` could move Cells under the same
+field names.
+
 The client is plain ES modules and a canvas in `web/` — no build step, per
 [ADR-0004](docs/adr/0004-vanilla-canvas-pwa-client.md). Its pure logic is tested
 under Node's own runner, a test-time requirement and never a build step:

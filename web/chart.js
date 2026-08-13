@@ -24,6 +24,16 @@ export function readingDirection({ construction, start, flips }, row) {
   return flips[row] ?? (construction === FLAT && (row - 1) % 2 === 1 ? opposite(start) : start);
 }
 
+/**
+ * Charts kept on the device outlive the service release that parsed them, so
+ * one read back off the device is checked before it is drawn: a later schema
+ * could move Cells under the same field names, and a mis-read Chart is a
+ * knitter following counts that are not their pattern's.
+ */
+export const SCHEMA_VERSION = 1;
+
+export const isReadable = (chart) => chart?.schema_version === SCHEMA_VERSION;
+
 // `confidence.chart` is 1.0 when the crop's edges landed on gridlines and 0.0
 // when one sat exactly between two — a coin flip that may have cost a Cell. The
 // four corpus crops, drawn a few px off by hand as a knitter's would be, score
@@ -115,7 +125,10 @@ export function repaint(chart, { row, from, to }, entry) {
   const [first, last] = from <= to ? [from, to] : [to, from];
   if (!Number.isInteger(first) || !Number.isInteger(last) || first < 0 || last >= colCount(chart))
     throw new Error(`cells ${first}–${last} are outside this Chart`);
-  if (entry !== NON_STITCH && !(entry >= 0 && entry < chart.palette.length))
+  // Whole numbers here too: `null >= 0` is true, and a null written into `cells`
+  // is a Cell with no colour that only shows up when something tries to draw it.
+  const known = Number.isInteger(entry) && entry >= 0 && entry < chart.palette.length;
+  if (entry !== NON_STITCH && !known)
     throw new Error(`no Palette entry ${entry} in this Chart`);
 
   const index = rowIndex(chart, row);

@@ -1,5 +1,6 @@
 // Pick an image, draw a rectangle around the grid, parse it, Review what came
-// back against the image, then Knit the Chart a Row at a time.
+// back against the image, then Knit the Chart a Row at a time. What is parsed
+// stays on the device, so sitting down again is one tap on the library.
 
 import {
   FLAT,
@@ -8,6 +9,7 @@ import {
   colCount,
   cropIsDoubtful,
   entryLabel,
+  isReadable,
   opposite,
   readingDirection,
   repaint,
@@ -17,6 +19,7 @@ import {
   runsOfRow,
 } from "./chart.js";
 import { corners, grabbedAnchor, rectFrom, wholePixels } from "./crop.js";
+import { askToKeep, forget, keep, remember, restore, spaceLeft, stored } from "./library.js";
 
 const PARSE_TIMEOUT_MS = 30_000; // against a measured ~10 s parse
 const HANDLE_CSS_PX = 11; // drawn radius; grabbed at twice that, a 44 px target
@@ -62,8 +65,13 @@ const startChoice = document.getElementById("start");
 const directionBar = document.getElementById("direction");
 const arrow = document.getElementById("arrow");
 const directionWords = document.getElementById("direction-words");
+const library = document.getElementById("library");
+const keptList = document.getElementById("kept");
+const quota = document.getElementById("quota");
 
 let chart = null;
+let openId = null; // which stored Chart is on screen, so its record follows the work
+let parses = 0; // which parse is on screen, so a slow save cannot attach to a newer one
 let mode = null; // Review or Knit; null until a Chart is on screen
 let view = { scale: 1, x: 0, y: 0 }; // the Review pan and zoom, in CSS px of the viewport
 let selected = 1; // the Row being knitted, numbered from the bottom of the image
@@ -74,6 +82,7 @@ let picked = null; // the Palette entry armed for Repaint in Review; null when n
 let painting = null; // the pointer, Row and first Cell of the paint drag in progress
 let openChip = null; // the Run whose chip has the Palette open, in Knit
 let chosen = null;
+let storedImageUrl = null; // the stored source image, held only while its Chart is on screen
 let crop = null; // in image pixels, so it survives the image being laid out differently
 let anchor = null; // the corner held still for the drag in progress
 let before = null; // the crop as it was when that drag started
@@ -169,15 +178,163 @@ async function parse(image, { x, y, w, h }) {
 /** A freshly parsed Chart is unverified, so it opens in Review, at its bottom Row. */
 function show(parsed) {
   chart = parsed;
+  openId = null; // nothing is written back until this parse has a record of its own
   selected = 1;
   reading = chosenReading({});
   picked = null;
+  revokeStored();
   reviewImage.src = source.src;
   frameTheImage();
   showImage(false);
   redraw();
   drawFacts();
   setMode(REVIEW);
+  keepThisChart((parses += 1));
+}
+
+/**
+ * A parse is kept the moment it lands, under the name of the file it came from
+ * — a knitter who reviews for ten minutes and then closes the tab has not lost
+ * the parse or the ten minutes. The source image goes with it, because Review's
+ * comparison and a later Re-parse both need it.
+ */
+async function keepThisChart(mine) {
+  try {
+    const id = await keep({ name: chosen.name, image: chosen, chart, selected, reading });
+    // A parse that landed while this one was being written owns the screen now,
+    // and its Cells must not be saved into this Chart's record.
+    if (mine === parses) openId = id;
+    await drawLibrary();
+  } catch (failure) {
+    say(error, failure.message);
+  }
+}
+
+/**
+ * The Chart as the knitter has it now, back onto the device: the Cells they
+ * have Repainted, the Row they have reached, and how they are reading it.
+ * Called from `drawRow`, which is the one thing every one of those changes ends
+ * with, so there is no state that can drift out of the record.
+ */
+async function persist() {
+  if (openId === null) return;
+  try {
+    await remember(openId, { chart, selected, reading });
+  } catch (failure) {
+    say(error, failure.message);
+  }
+}
+
+/** Let go of the stored image a closed Chart was being compared against. */
+function revokeStored() {
+  if (storedImageUrl) URL.revokeObjectURL(storedImageUrl);
+  storedImageUrl = null;
+}
+
+/**
+ * Every Chart on the device, and how much room is left for the next one. The
+ * space is shown rather than acted on: there is no eviction policy here, so the
+ * number is there for the knitter to run out of deliberately rather than
+ * suddenly.
+ */
+async function drawLibrary() {
+  try {
+    const kept = await stored();
+    library.hidden = !kept.length;
+    keptList.replaceChildren(...kept.map(shelved));
+    const left = await spaceLeft();
+    say(quota, left === null ? null : `${Math.round(left / 1e6)} MB free on this device`);
+  } catch (failure) {
+    say(error, failure.message);
+  }
+}
+
+/** Storage that failed under the knitter's finger has to say so, not do nothing. */
+const fail = (failure) => say(error, failure.message);
+
+/** One Chart on the shelf: its thumbnail and name open it, with rename and delete beside. */
+function shelved({ id, name, thumbnail }) {
+  const item = document.createElement("li");
+  const open = document.createElement("button");
+  const picture = document.createElement("img");
+  const url = URL.createObjectURL(thumbnail);
+  picture.src = url;
+  picture.alt = "";
+  picture.addEventListener("load", () => URL.revokeObjectURL(url));
+  open.className = "shelved";
+  open.append(picture, name);
+  open.addEventListener("click", () => openChart(id).catch(fail));
+  item.append(
+    open,
+    beside("Rename", () => renameChart(id, name)),
+    beside("Delete", () => deleteChart(id, name)),
+  );
+  return item;
+}
+
+function beside(label, act) {
+  const button = document.createElement("button");
+  button.className = "beside";
+  button.textContent = label;
+  button.addEventListener("click", () => act().catch(fail));
+  return button;
+}
+
+/**
+ * A Chart opened from the library has already been Reviewed, and the knitter
+ * opened it to knit, so it lands in Knit — at the Row they stopped on, read the
+ * way they were reading it.
+ */
+async function openChart(id) {
+  const kept = await restore(id);
+  if (!kept) return drawLibrary(); // deleted in another tab
+  if (!isReadable(kept.chart)) {
+    // Refused, not drawn: a later schema could move Cells under these very
+    // field names, and a chart read wrong is a chart knitted wrong.
+    setMode(null);
+    return say(
+      error,
+      `“${kept.name}” was saved by a newer version of this app and cannot be read here.`,
+    );
+  }
+  say(error, null);
+  say(status, null);
+  parses += 1; // this Chart owns the screen now, whatever save is still in flight
+  openId = id;
+  chart = kept.chart;
+  selected = kept.selected;
+  reading = kept.reading;
+  constructionChoice.value = reading.construction;
+  startChoice.value = reading.start;
+  picked = null;
+  revokeStored();
+  storedImageUrl = URL.createObjectURL(kept.image);
+  reviewImage.src = storedImageUrl;
+  frameTheImage();
+  showImage(false);
+  redraw();
+  drawFacts();
+  setMode(KNIT);
+}
+
+/** A filename is what a Chart is called until the knitter says otherwise. */
+async function renameChart(id, was) {
+  const name = prompt("Name this chart", was)?.trim();
+  if (!name || name === was) return;
+  await remember(id, { name });
+  await drawLibrary();
+}
+
+/** The only thing that removes a Chart — nothing here evicts one to make room. */
+async function deleteChart(id, name) {
+  if (!confirm(`Delete “${name}”? The chart and any corrections go with it.`)) return;
+  await forget(id);
+  if (openId === id) {
+    openId = chart = null;
+    revokeStored();
+    setMode(null);
+  }
+  await drawLibrary();
 }
 
 /** Show Review, Knit, or neither. The two are navigation models, so only one is up. */
@@ -302,6 +459,7 @@ function drawRow() {
   showOpenChip();
   previous.disabled = selected === 1;
   next.disabled = selected === rows;
+  persist();
 }
 
 /** One Run: a swatch and a Cell count, big enough to hit — and tapping it Repaints it. */
@@ -432,7 +590,7 @@ viewport.addEventListener("pointerdown", (event) => {
   // With an entry armed, one finger on the Chart paints. A second finger is a
   // pinch, so it ends the paint and the fingers zoom: Repaint takes the one
   // gesture pan can spare, and never the one it cannot.
-  painting = null;
+  stopPainting();
   if (armedToPaint() && touching.size === 1 && over(reviewChart, event)) {
     const { row, col } = cellAt(reviewChart, event);
     painting = { pointer: event.pointerId, row, from: col, base: chart };
@@ -459,13 +617,23 @@ viewport.addEventListener("pointermove", (event) => {
 
 for (const finished of ["pointerup", "pointercancel"]) {
   viewport.addEventListener(finished, (event) => {
-    if (painting?.pointer === event.pointerId) {
-      painting = null;
-      redraw(); // the drag only kept the Chart in front of the knitter up to date
-    }
+    if (painting?.pointer === event.pointerId) stopPainting();
     touching.delete(event.pointerId);
     grip = gripNow(); // lifting one finger of a pinch must not throw the Chart across the screen
   });
+}
+
+/**
+ * End a paint drag, however it ended — the finger lifted, or a second finger
+ * turned it into a pinch. The drag only kept the one Row in front of the knitter
+ * up to date, so everything else catches up here: the other canvases, the
+ * Readout, and the record on the device. A paint that ended without this is a
+ * correction the knitter made and the device never heard about.
+ */
+function stopPainting() {
+  if (!painting) return;
+  painting = null;
+  redraw();
 }
 
 /** Repaint is armed only over the Chart itself: the image beside it is not paintable. */
@@ -614,3 +782,8 @@ function say(element, message) {
   element.textContent = message ?? "";
   element.hidden = !message;
 }
+
+// Asked before the first Chart is written rather than after one has been
+// evicted: a browser that clears storage under pressure does it without asking.
+askToKeep();
+drawLibrary();

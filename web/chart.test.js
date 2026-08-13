@@ -10,6 +10,7 @@ import {
   cellsOfRow,
   cropIsDoubtful,
   entryLabel,
+  isReadable,
   readingDirection,
   repaint,
   rowCount,
@@ -226,10 +227,22 @@ test("Repainting outside the Chart is refused rather than silently clamped", () 
   assert.throws(() => repaint(CHART, { row: 1, from: -1, to: 2 }, 1), /outside/);
   assert.throws(() => repaint(CHART, { row: 1, from: 4, to: 6 }, 1), /outside/);
   assert.throws(() => repaint(CHART, { row: 1, from: 0, to: 0 }, 3), /Palette entry 3/);
+  assert.throws(() => repaint(CHART, { row: 1, from: 0, to: 0 }, null), /Palette entry/); // `null >= 0`
+  assert.throws(() => repaint(CHART, { row: 1, from: 0, to: 0 }, 1.5), /Palette entry/);
   // -1 is a Cell value, never a Palette entry, so it is paintable
   assert.deepEqual(cellsOfRow(repaint(CHART, { row: 1, from: 0, to: 0 }, -1), 1), [
     -1, 1, 0, 1, 0, 1,
   ]);
+});
+
+test("a stored Chart from an unrecognised schema is refused rather than mis-read", () => {
+  // Charts on the device outlive the release that parsed them, and a later
+  // schema could move Cells under the same field names.
+  assert.equal(isReadable(CHART), true);
+  assert.equal(isReadable({ ...CHART, schema_version: 2 }), false);
+  assert.equal(isReadable({ ...CHART, schema_version: "1" }), false); // a string is not the version
+  assert.equal(isReadable({ ...CHART, schema_version: undefined }), false);
+  assert.equal(isReadable(undefined), false); // nothing under that key at all
 });
 
 test("only a crop near the coin flip is doubtful, and a Chart without the signal never is", () => {

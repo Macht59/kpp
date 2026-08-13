@@ -81,6 +81,19 @@
   #paint-hint { margin: 0; opacity: 0.8; }
   #doubt { padding: 0.75rem; margin: 0; border: 1px solid #b7791f; border-radius: 0.5rem; color: #b7791f; }
 
+  /* The library: a thumbnail and a name to find a chart by sight, with rename
+     and delete beside them rather than behind a menu. */
+  #library { display: flex; flex-direction: column; gap: 0.6rem; }
+  #kept { display: flex; flex-direction: column; gap: 0.5rem; list-style: none; margin: 0; padding: 0; }
+  #kept li { display: flex; align-items: stretch; gap: 0.5rem; }
+  #kept .shelved {
+    display: flex; align-items: center; gap: 0.7rem; flex: 1; min-width: 0;
+    padding: 0.5rem; text-align: left; overflow-wrap: anywhere;
+  }
+  #kept img { width: 56px; height: 56px; flex: none; object-fit: contain; margin: 0; }
+  #kept .beside { width: auto; flex: none; padding: 0.5rem 0.7rem; font-weight: 400; }
+  #quota { margin: 0; opacity: 0.8; }
+
   #stage { position: relative; width: fit-content; margin: 0 auto; }
   #overlay { position: absolute; inset: 0; touch-action: none; }
   #hint { margin: 0; text-align: center; opacity: 0.8; }
@@ -97,6 +110,15 @@
     Choose a chart image
     <input id="file" type="file" accept="image/*">
   </label>
+
+  <!-- Charts stay on the device with the images they were parsed from, so
+       sitting down again is one tap rather than an upload, a crop and a wait.
+       Nothing here is ever removed to make room: the knitter deletes a chart. -->
+  <section id="library" hidden>
+    <h2>Your charts</h2>
+    <ul id="kept"></ul>
+    <p id="quota"></p>
+  </section>
 
   <p id="hint">Drag a rectangle around the grid. Keep the row and column numbers
     outside it, or the Chart comes out the wrong size.</p>
