@@ -404,20 +404,20 @@ this module and is tested here, once, so no other test needs to know about it.
 
 ## Further Notes
 
-**Two assumptions made rather than confirmed.** Both are stated here so they
-are visible rather than buried in code:
+**Two assumptions, since confirmed with the knitter.** Both were guesses when
+this spec was written, and both were put to the knitter after `/implement` and
+held. They stay stated here, because the code reads as arbitrary without them:
 
 1. **Row numbering runs bottom to top.** Knitting charts are conventionally
    worked from the bottom Row upward, so displayed Row 1 is the last array Row
-   and *Next Row* moves up the image. This was not put to the knitter during
-   grilling — it surfaced while writing the spec. It is a single inversion in
-   one module, so reversing it is cheap, but it is worth confirming before
-   `/implement` because getting it backwards makes the whole app read wrong.
+   and *Next Row* moves up the image. It is a single inversion in one module,
+   so reversing it would have been cheap — but getting it backwards makes the
+   whole app read wrong, which is why it was worth asking. Confirmed.
 2. **Construction defaults to flat, starting direction to right-to-left.**
    Right-to-left matches both the knitting convention and the corpus, where two
-   of four charts number right-to-left. Flat is the weaker half of the guess —
+   of four charts number right-to-left. Flat was the weaker half of the guess —
    stranded colorwork is often worked in the round — but it is one control the
-   knitter sets at Review.
+   knitter sets at Review. Confirmed.
 
 **Hosting, when it is committed to.** An always-on small instance beats
 scale-to-zero here: a cold start pulling a SciPy-sized image on top of a ten
