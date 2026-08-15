@@ -8,6 +8,7 @@ import {
   LEFT_TO_RIGHT,
   RIGHT_TO_LEFT,
   cellsOfRow,
+  colCount,
   cropIsDoubtful,
   entryLabel,
   isReadable,
@@ -17,6 +18,7 @@ import {
   rowIndex,
   rowNumber,
   runsOfRow,
+  view,
 } from "./chart.js";
 
 // Small enough to read: three Rows, the bottom one alternating, the middle one
@@ -35,6 +37,9 @@ const CHART = {
     [0, 1, 0, 1, 0, 1],
   ],
 };
+
+/** A Chart nobody has decided anything about yet: the state a fresh parse opens with. */
+const UNREAD = { separation: 0, trimmed: false, overlay: {} };
 
 /** One Row on its own, so a test can state the Cells it means. */
 const rowOf = (cells) => ({
@@ -182,55 +187,91 @@ test("a Run says where it starts, so the chip showing it can Repaint it", () => 
   );
 });
 
+test("a view with nothing chosen is the Chart the existing functions already consumed", () => {
+  const shown = view(CHART, UNREAD);
+  assert.deepEqual(shown.cells, CHART.cells);
+  assert.deepEqual(shown.palette, CHART.palette);
+  assert.equal(rowCount(shown), rowCount(CHART));
+  assert.equal(colCount(shown), colCount(CHART));
+  for (const row of [1, 2, 3])
+    assert.deepEqual(runsOfRow(shown, row, LEFT_TO_RIGHT), runsOfRow(CHART, row, LEFT_TO_RIGHT));
+  assert.equal(entryLabel(shown, 2), "Rust");
+});
+
 test("Repainting one Cell changes that Cell and nothing else", () => {
-  const painted = repaint(CHART, { row: 1, from: 2, to: 2 }, 2);
+  const painted = view(CHART, repaint(CHART, UNREAD, { row: 1, from: 2, to: 2 }, 2));
   assert.deepEqual(cellsOfRow(painted, 1), [0, 1, 2, 1, 0, 1]);
   assert.deepEqual(cellsOfRow(painted, 2), cellsOfRow(CHART, 2));
   assert.deepEqual(cellsOfRow(painted, 3), cellsOfRow(CHART, 3));
 });
 
 test("Repainting a span takes the whole span, dragged either way", () => {
-  assert.deepEqual(cellsOfRow(repaint(CHART, { row: 1, from: 1, to: 4 }, 0), 1), [0, 0, 0, 0, 0, 1]);
+  const span = (from, to) =>
+    cellsOfRow(view(CHART, repaint(CHART, UNREAD, { row: 1, from, to }, 0)), 1);
+  assert.deepEqual(span(1, 4), [0, 0, 0, 0, 0, 1]);
   // a knitter dragging right to left hands the ends over backwards
-  assert.deepEqual(cellsOfRow(repaint(CHART, { row: 1, from: 4, to: 1 }, 0), 1), [0, 0, 0, 0, 0, 1]);
+  assert.deepEqual(span(4, 1), [0, 0, 0, 0, 0, 1]);
 });
 
-test("Repaint returns a new Chart rather than mutating the one it was given", () => {
-  const before = structuredClone(CHART);
-  const painted = repaint(CHART, { row: 1, from: 0, to: 5 }, 2);
-  assert.deepEqual(CHART, before); // the Chart a caller still holds does not change under it
-  assert.notEqual(painted, CHART);
-  assert.notEqual(painted.cells, CHART.cells);
-  assert.notEqual(painted.cells[2], CHART.cells[2]);
-  assert.equal(painted.cells[0], CHART.cells[0]); // untouched Rows are shared, not copied
+test("Repaint returns new view state, leaving the Chart and the state it was given alone", () => {
+  const chartBefore = structuredClone(CHART);
+  const stateBefore = structuredClone(UNREAD);
+  const painted = repaint(CHART, UNREAD, { row: 1, from: 0, to: 5 }, 2);
+  // the parse is never rewritten — a Repaint is a decision about it, not a change to it
+  assert.deepEqual(CHART, chartBefore);
+  assert.deepEqual(UNREAD, stateBefore);
+  assert.notEqual(painted, UNREAD);
+  assert.notEqual(painted.overlay, UNREAD.overlay);
+  assert.equal(painted.separation, UNREAD.separation); // the other decisions come along untouched
+  assert.equal(painted.trimmed, UNREAD.trimmed);
+});
+
+test("a Repaint stacks onto the ones before it rather than replacing them", () => {
+  const first = repaint(CHART, UNREAD, { row: 1, from: 0, to: 0 }, 2);
+  const painted = view(CHART, repaint(CHART, first, { row: 3, from: 5, to: 5 }, 1));
+  assert.deepEqual(cellsOfRow(painted, 1), [2, 1, 0, 1, 0, 1]);
+  assert.deepEqual(cellsOfRow(painted, 3), [2, 2, 2, 2, 2, 1]);
+});
+
+test("Repaints survive the round trip through the device", () => {
+  // The view state is what the library keeps, so it has to be storable as it is.
+  const painted = repaint(CHART, UNREAD, { row: 2, from: 1, to: 2 }, 2);
+  assert.deepEqual(
+    cellsOfRow(view(CHART, structuredClone(painted)), 2),
+    cellsOfRow(view(CHART, painted), 2),
+  );
+  assert.deepEqual(cellsOfRow(view(CHART, painted), 2), [0, 2, 2, 1, 1, 1]);
 });
 
 test("Repainting so two neighbouring Runs share a colour merges them in the next Readout", () => {
   // the stray one-Cell chip the spec leans on: [0,1,0] mid-Row reads as three
   const strayed = rowOf([1, 1, 0, 1, 1]);
   assert.equal(runsOfRow(strayed, 1, LEFT_TO_RIGHT).length, 3);
-  const merged = repaint(strayed, { row: 1, from: 2, to: 2 }, 1);
+  const merged = view(strayed, repaint(strayed, UNREAD, { row: 1, from: 2, to: 2 }, 1));
   assert.deepEqual(counted(runsOfRow(merged, 1, LEFT_TO_RIGHT)), [{ entry: 1, count: 5 }]);
 });
 
 test("Repainting Non-stitch back to yarn joins the Runs it was splitting", () => {
-  const merged = repaint(rowOf([1, -1, 1]), { row: 1, from: 1, to: 1 }, 1);
+  const gapped = rowOf([1, -1, 1]);
+  const merged = view(gapped, repaint(gapped, UNREAD, { row: 1, from: 1, to: 1 }, 1));
   assert.deepEqual(counted(runsOfRow(merged, 1, LEFT_TO_RIGHT)), [{ entry: 1, count: 3 }]);
 });
 
 test("Repainting outside the Chart is refused rather than silently clamped", () => {
   // clamping would paint Cells the knitter never touched, and quietly
-  assert.throws(() => repaint(CHART, { row: 0, from: 0, to: 0 }, 1), /Row 0/);
-  assert.throws(() => repaint(CHART, { row: 4, from: 0, to: 0 }, 1), /Row 4/);
-  assert.throws(() => repaint(CHART, { row: 1.5, from: 0, to: 0 }, 1), /Row 1.5/); // in range, still no Row
-  assert.throws(() => repaint(CHART, { row: 1, from: 0.5, to: 2 }, 1), /outside/);
-  assert.throws(() => repaint(CHART, { row: 1, from: -1, to: 2 }, 1), /outside/);
-  assert.throws(() => repaint(CHART, { row: 1, from: 4, to: 6 }, 1), /outside/);
-  assert.throws(() => repaint(CHART, { row: 1, from: 0, to: 0 }, 3), /Palette entry 3/);
-  assert.throws(() => repaint(CHART, { row: 1, from: 0, to: 0 }, null), /Palette entry/); // `null >= 0`
-  assert.throws(() => repaint(CHART, { row: 1, from: 0, to: 0 }, 1.5), /Palette entry/);
-  // -1 is a Cell value, never a Palette entry, so it is paintable
-  assert.deepEqual(cellsOfRow(repaint(CHART, { row: 1, from: 0, to: 0 }, -1), 1), [
+  const paint = (span, entry) => repaint(CHART, UNREAD, span, entry);
+  assert.throws(() => paint({ row: 0, from: 0, to: 0 }, 1), /Row 0/);
+  assert.throws(() => paint({ row: 4, from: 0, to: 0 }, 1), /Row 4/);
+  assert.throws(() => paint({ row: 1.5, from: 0, to: 0 }, 1), /Row 1.5/); // in range, still no Row
+  assert.throws(() => paint({ row: 1, from: 0.5, to: 2 }, 1), /outside/);
+  assert.throws(() => paint({ row: 1, from: -1, to: 2 }, 1), /outside/);
+  assert.throws(() => paint({ row: 1, from: 4, to: 6 }, 1), /outside/);
+  assert.throws(() => paint({ row: 1, from: 0, to: 0 }, 3), /Palette entry 3/);
+  assert.throws(() => paint({ row: 1, from: 0, to: 0 }, null), /Palette entry/); // `null >= 0`
+  assert.throws(() => paint({ row: 1, from: 0, to: 0 }, 1.5), /Palette entry/);
+  // -1 is a Cell value, never a Palette entry, so it is paintable — and lands in
+  // the overlay like any other Repaint
+  assert.deepEqual(cellsOfRow(view(CHART, paint({ row: 1, from: 0, to: 0 }, -1)), 1), [
     -1, 1, 0, 1, 0, 1,
   ]);
 });

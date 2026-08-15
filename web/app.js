@@ -17,6 +17,7 @@ import {
   rowIndex,
   rowNumber,
   runsOfRow,
+  view,
 } from "./chart.js";
 import { corners, grabbedAnchor, rectFrom, wholePixels } from "./crop.js";
 import { askToKeep, forget, keep, remember, restore, spaceLeft, stored } from "./library.js";
@@ -75,11 +76,15 @@ const library = document.getElementById("library");
 const keptList = document.getElementById("kept");
 const quota = document.getElementById("quota");
 
-let chart = null;
+let chart = null; // the parse, as it came back and as it stays
+let shown = null; // the Chart the knitter reads: `chart` under the decisions in `chosenView`
+// What the knitter has decided about how this Chart is read — their Repaints,
+// and (from later tickets) the Separation and whether Blank edges are hidden.
+let chosenView = keptView({});
 let openId = null; // which stored Chart is on screen, so its record follows the work
 let parses = 0; // which parse is on screen, so a slow save cannot attach to a newer one
 let mode = null; // Review or Knit; null until a Chart is on screen
-let view = { scale: 1, x: 0, y: 0 }; // the Review pan and zoom, in CSS px of the viewport
+let camera = { scale: 1, x: 0, y: 0 }; // the Review pan and zoom, in CSS px of the viewport
 let selected = 1; // the Row being knitted, numbered from the bottom of the image
 // Construction and Reading direction are the knitter's, per Chart: the parser
 // cannot supply them, and neither is ever written into `cells`.
@@ -217,16 +222,27 @@ async function parse(image, { x, y, w, h }) {
   return chart;
 }
 
+/**
+ * The decisions a stored Chart was left with, and what a Chart nobody has
+ * decided anything about yet starts from. A record written before these fields
+ * existed simply has none of them, and lands on the same defaults a fresh parse
+ * does.
+ */
+function keptView({ separation, trimmed, overlay }) {
+  return { separation: separation ?? 0, trimmed: trimmed ?? false, overlay: overlay ?? {} };
+}
+
 /** A freshly parsed Chart is unverified, so it opens in Review, at its bottom Row. */
 function show(parsed) {
   chart = parsed;
+  chosenView = keptView({});
   openId = null; // nothing is written back until this parse has a record of its own
   selected = 1;
   reading = chosenReading({});
   picked = null;
+  redraw(); // before the frame: the window is cut to the size of the Chart being read
   frameTheImage();
   showImage(false);
-  redraw();
   drawFacts();
   setMode(REVIEW);
   keepThisChart((parses += 1));
@@ -240,7 +256,14 @@ function show(parsed) {
  */
 async function keepThisChart(mine) {
   try {
-    const id = await keep({ name: chartName, image: chosen, chart, selected, reading });
+    const id = await keep({
+      name: chartName,
+      image: chosen,
+      chart,
+      selected,
+      reading,
+      ...chosenView,
+    });
     // A parse that landed while this one was being written owns the screen now,
     // and its Cells must not be saved into this Chart's record.
     if (mine === parses) openId = id;
@@ -251,15 +274,17 @@ async function keepThisChart(mine) {
 }
 
 /**
- * The Chart as the knitter has it now, back onto the device: the Cells they
- * have Repainted, the Row they have reached, and how they are reading it.
+ * The Chart as the knitter has it now, back onto the device: the decisions they
+ * have made about it, the Row they have reached, and how they are reading it.
+ * The parse itself goes back unchanged — a Repaint is a decision about it, not
+ * a rewrite of it.
  * Called from `drawRow`, which is the one thing every one of those changes ends
  * with, so there is no state that can drift out of the record.
  */
 async function persist() {
   if (openId === null) return;
   try {
-    await remember(openId, { chart, selected, reading });
+    await remember(openId, { chart, selected, reading, ...chosenView });
   } catch (failure) {
     say(error, failure.message);
   }
@@ -293,7 +318,7 @@ async function drawLibrary() {
 const fail = (failure) => say(error, failure.message);
 
 /** One Chart on the shelf: its thumbnail and name open it, with rename and delete beside. */
-function shelved({ id, name, thumbnail, chart }) {
+function shelved({ id, name, thumbnail, ...kept }) {
   const item = document.createElement("li");
   const open = document.createElement("button");
   const picture = document.createElement("img");
@@ -303,7 +328,7 @@ function shelved({ id, name, thumbnail, chart }) {
   picture.alt = "";
   picture.addEventListener("load", () => URL.revokeObjectURL(url));
   title.className = "title";
-  title.append(name, described(chart));
+  title.append(name, described(kept));
   open.className = "shelved";
   open.append(picture, title);
   open.addEventListener("click", () => openChart(id).catch(fail));
@@ -321,13 +346,18 @@ function shelved({ id, name, thumbnail, chart }) {
  * thing that says which crop was the better one — a Row short is exactly the
  * error a Re-parse was reached for.
  */
-function described(chart) {
+function described({ chart, ...kept }) {
   const detail = document.createElement("small");
+  // Through the view, like everything else that counts Cells: the size in the
+  // list is the Chart the knitter opens, not the one that was parsed.
   detail.textContent = isReadable(chart)
-    ? `${rowCount(chart)} rows × ${colCount(chart)} columns`
+    ? measured(view(chart, keptView(kept)))
     : "saved by a newer version of this app";
   return detail;
 }
+
+/** How big a Chart is, in the words Review and the library both use. */
+const measured = (chart) => `${rowCount(chart)} rows × ${colCount(chart)} columns`;
 
 function beside(label, act) {
   const button = document.createElement("button");
@@ -359,6 +389,7 @@ async function openChart(id) {
   parses += 1; // this Chart owns the screen now, whatever save is still in flight
   openId = id;
   chart = kept.chart;
+  chosenView = keptView(kept);
   selected = kept.selected;
   reading = kept.reading;
   constructionChoice.value = reading.construction;
@@ -378,9 +409,9 @@ async function openChart(id) {
   stage.hidden = true;
   crop = null;
   rectangle.disabled = whole.disabled = true;
+  redraw();
   frameTheImage();
   showImage(false);
-  redraw();
   drawFacts();
   setMode(KNIT);
 }
@@ -431,14 +462,14 @@ modeSwitch.addEventListener("click", () => setMode(mode === REVIEW ? KNIT : REVI
 function drawFacts() {
   // Stated from `cells` rather than from `dimensions`: the contract declares
   // both and they agree, but only one of them is the Chart that gets knitted.
-  const entries = chart.palette.length;
-  size.textContent = `${rowCount(chart)} rows × ${colCount(chart)} columns`;
+  const entries = shown.palette.length;
+  size.textContent = measured(shown);
   paletteSize.textContent = `${entries} ${entries === 1 ? "colour" : "colours"}`;
   paletteList.replaceChildren(
-    ...chart.palette.map((colour, entry) => pickable(colour, entry, arm)),
+    ...shown.palette.map((colour, entry) => pickable(colour, entry, arm)),
   );
   chipPalette.replaceChildren(
-    ...chart.palette.map((colour, entry) => pickable(colour, entry, paintRun)),
+    ...shown.palette.map((colour, entry) => pickable(colour, entry, paintRun)),
   );
   doubt.hidden = !cropIsDoubtful(chart);
   showArmed();
@@ -453,7 +484,7 @@ function pickable(colour, entry, choose) {
   const button = document.createElement("button");
   button.className = "swatch";
   button.style.background = rgb(colour.rgb);
-  button.title = entryLabel(chart, entry);
+  button.title = entryLabel(shown, entry);
   button.setAttribute("aria-label", button.title);
   button.addEventListener("click", () => choose(entry));
   item.append(button);
@@ -476,7 +507,7 @@ function showArmed() {
   paintHint.textContent =
     picked === null
       ? "Tap a colour to correct cells with it. Drag with one finger to pan, two to zoom."
-      : `Painting ${entryLabel(chart, picked)} — tap a cell, or drag across several. ` +
+      : `Painting ${entryLabel(shown, picked)} — tap a cell, or drag across several. ` +
         "Tap the colour again to pan instead.";
 }
 
@@ -514,7 +545,7 @@ const reparsed = (name) => name + REPARSED;
 function frameTheImage() {
   const [x, y, w] = chart.source.crop;
   const zoom = chart.source.image_width / w; // the crop, whatever its size, fills the window
-  cropped.style.aspectRatio = `${colCount(chart)} / ${rowCount(chart)}`;
+  cropped.style.aspectRatio = `${colCount(shown)} / ${rowCount(shown)}`;
   reviewImage.style.width = `${zoom * 100}%`;
   // percentage margins resolve against the window's width, which is the crop's width
   reviewImage.style.marginLeft = `${(-x * 100) / w}%`;
@@ -531,14 +562,14 @@ function showImage(wanted) {
 
 /** The Selected Row: where it sits, its colour bands, and its Readout. */
 function drawRow() {
-  const rows = rowCount(chart);
+  const rows = rowCount(shown);
   const direction = readingDirection(reading, selected);
-  const runs = runsOfRow(chart, selected, direction);
+  const runs = runsOfRow(shown, selected, direction);
   const stitches = runs.reduce((total, run) => total + run.count, 0);
 
-  marker.style.top = `${(rowIndex(chart, selected) * 100) / rows}%`;
+  marker.style.top = `${(rowIndex(shown, selected) * 100) / rows}%`;
   marker.style.height = `${100 / rows}%`;
-  drawCells(band, [cellsOfRow(chart, selected)]);
+  drawCells(band, [cellsOfRow(shown, selected)]);
 
   const rightToLeft = direction === RIGHT_TO_LEFT;
   directionBar.className = direction;
@@ -565,8 +596,8 @@ function chip(run) {
   button.dataset.at = run.at;
   button.setAttribute("aria-controls", chipPalette.id);
   swatch.className = "swatch";
-  swatch.style.background = rgb(chart.palette[run.entry].rgb);
-  button.append(swatch, `${run.count} ${entryLabel(chart, run.entry)}`);
+  swatch.style.background = rgb(shown.palette[run.entry].rgb);
+  button.append(swatch, `${run.count} ${entryLabel(shown, run.entry)}`);
   button.addEventListener("click", () => {
     openChip = openChip?.at === run.at ? null : run;
     showOpenChip();
@@ -588,14 +619,19 @@ function showOpenChip() {
  */
 function paintRun(entry) {
   const { at, count } = openChip;
-  chart = repaint(chart, { row: selected, from: at, to: at + count - 1 }, entry);
+  chosenView = repaint(chart, chosenView, { row: selected, from: at, to: at + count - 1 }, entry);
   redraw();
 }
 
-/** Every view of the Cells, after a Repaint has given us a new Chart. */
+/**
+ * Every view of the Cells, after a decision about the Chart has changed. The
+ * Chart on screen is derived here and nowhere else, so nothing draws the parse
+ * as it arrived.
+ */
 function redraw() {
-  drawCells(reviewChart, chart.cells);
-  drawCells(wholeChart, chart.cells);
+  shown = view(chart, chosenView);
+  drawCells(reviewChart, shown.cells);
+  drawCells(wholeChart, shown.cells);
   drawRow();
 }
 
@@ -607,7 +643,7 @@ function drawCells(canvas, cells) {
   cells.forEach((row, r) =>
     row.forEach((cell, c) => {
       if (cell < 0) return; // Non-stitch is background, not yarn: leave it transparent
-      context.fillStyle = rgb(chart.palette[cell].rgb);
+      context.fillStyle = rgb(shown.palette[cell].rgb);
       context.fillRect(c, r, 1, 1);
     }),
   );
@@ -616,10 +652,10 @@ function drawCells(canvas, cells) {
 /** One array Row's Cells, over whatever was drawn there before. */
 function drawRowOfCells(canvas, index) {
   const context = canvas.getContext("2d");
-  chart.cells[index].forEach((cell, c) => {
+  shown.cells[index].forEach((cell, c) => {
     context.clearRect(c, index, 1, 1); // Non-stitch is transparent, so painting over is not enough
     if (cell < 0) return;
-    context.fillStyle = rgb(chart.palette[cell].rgb);
+    context.fillStyle = rgb(shown.palette[cell].rgb);
     context.fillRect(c, index, 1, 1);
   });
 }
@@ -631,7 +667,7 @@ for (const [button, step] of [
   [previous, -1],
 ]) {
   button.addEventListener("click", () => {
-    selected = Math.min(Math.max(selected + step, 1), rowCount(chart));
+    selected = Math.min(Math.max(selected + step, 1), rowCount(shown));
     drawRow();
   });
 }
@@ -687,7 +723,7 @@ viewport.addEventListener("pointerdown", (event) => {
   stopPainting();
   if (armedToPaint() && touching.size === 1 && over(reviewChart, event)) {
     const { row, col } = cellAt(reviewChart, event);
-    painting = { pointer: event.pointerId, row, from: col, base: chart };
+    painting = { pointer: event.pointerId, row, from: col, base: chosenView };
     paintTo(col);
   }
 });
@@ -698,12 +734,12 @@ viewport.addEventListener("pointermove", (event) => {
   touching.set(event.pointerId, event);
   const now = gripNow();
   const pinched = grip.spread && now.spread ? now.spread / grip.spread : 1;
-  const scale = Math.min(Math.max(view.scale * pinched, fitsWhole()), MAX_ZOOM);
-  const grew = scale / view.scale;
-  view = {
+  const scale = Math.min(Math.max(camera.scale * pinched, fitsWhole()), MAX_ZOOM);
+  const grew = scale / camera.scale;
+  camera = {
     scale,
-    x: now.x - grew * (grip.x - view.x),
-    y: now.y - grew * (grip.y - view.y),
+    x: now.x - grew * (grip.x - camera.x),
+    y: now.y - grew * (grip.y - camera.y),
   };
   grip = now;
   applyView();
@@ -751,11 +787,11 @@ function over(canvas, event) {
 /** Which Cell a pointer is over, clamped: a drag off the edge paints up to it. */
 function cellAt(canvas, event) {
   const box = canvas.getBoundingClientRect();
-  const rows = rowCount(chart);
-  const cols = colCount(chart);
+  const rows = rowCount(shown);
+  const cols = colCount(shown);
   const at = (fraction, count) => Math.min(Math.max(Math.floor(fraction * count), 0), count - 1);
   return {
-    row: rowNumber(chart, at((event.clientY - box.top) / box.height, rows)),
+    row: rowNumber(shown, at((event.clientY - box.top) / box.height, rows)),
     col: at((event.clientX - box.left) / box.width, cols),
   };
 }
@@ -771,8 +807,10 @@ function cellAt(canvas, event) {
  * pointer move, for one Row's worth of difference.
  */
 function paintTo(col) {
-  chart = repaint(painting.base, { row: painting.row, from: painting.from, to: col }, picked);
-  drawRowOfCells(reviewChart, rowIndex(chart, painting.row));
+  const span = { row: painting.row, from: painting.from, to: col };
+  chosenView = repaint(chart, painting.base, span, picked);
+  shown = view(chart, chosenView);
+  drawRowOfCells(reviewChart, rowIndex(shown, painting.row));
 }
 
 /** Where the fingers are: their centre in the viewport, and how far apart they are. */
@@ -791,7 +829,7 @@ function gripNow() {
 
 /** Review is a survey, so it opens on the whole Chart, however tall that is. */
 function resetView() {
-  view = { scale: fitsWhole(), x: 0, y: 0 };
+  camera = { scale: fitsWhole(), x: 0, y: 0 };
   applyView();
 }
 
@@ -809,9 +847,9 @@ function fitsWhole() {
 function applyView() {
   const [width, height] = [viewport.clientWidth, viewport.clientHeight];
   // fit-width at scale 1, so the content is one viewport wide before the zoom
-  view.x = middleOr(width, view.scale * width, view.x);
-  view.y = middleOr(height, view.scale * pannable.offsetHeight, view.y);
-  pannable.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
+  camera.x = middleOr(width, camera.scale * width, camera.x);
+  camera.y = middleOr(height, camera.scale * pannable.offsetHeight, camera.y);
+  pannable.style.transform = `translate(${camera.x}px, ${camera.y}px) scale(${camera.scale})`;
 }
 
 /** An offset that keeps the content covering the viewport — or centred, when it is smaller. */

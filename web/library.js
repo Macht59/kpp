@@ -97,7 +97,17 @@ export async function remember(id, fields) {
 export async function stored() {
   const all = await run([CHARTS], "readonly", (charts) => charts.getAll());
   return all.result
-    .map(({ id, name, thumbnail, chart }) => ({ id, name, thumbnail, chart }))
+    .map(({ id, name, thumbnail, chart, separation, trimmed, overlay }) => ({
+      id,
+      name,
+      thumbnail,
+      chart,
+      // the knitter's decisions come along, because the list states the size of
+      // the Chart they are reading rather than the one that was parsed
+      separation,
+      trimmed,
+      overlay,
+    }))
     .reverse();
 }
 

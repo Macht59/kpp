@@ -108,34 +108,57 @@ export function runsOfRow(chart, row, direction) {
 }
 
 /**
+ * The Chart the knitter is reading, derived from the stored one and the
+ * decisions they have made about it: which Separation to read it at, whether
+ * Blank edges are hidden, and the Cells they have Repainted. It comes back in
+ * exactly the shape every function above consumes, so they operate on the view
+ * and never learn that a view exists.
+ *
+ * `separation` and `trimmed` are inert here — Separations and Blank edges land
+ * in their own tickets. `overlay` is the Repaints, keyed by array Row and
+ * Column of the stored Chart, so it holds still when the Chart is read
+ * differently.
+ */
+export function view(chart, { overlay = {} } = {}) {
+  return {
+    ...chart,
+    cells: chart.cells.map((cells, r) => cells.map((cell, c) => overlay[`${r},${c}`] ?? cell)),
+  };
+}
+
+/**
  * A Row's span of Cells — `from` to `to` inclusive, in either order, because a
  * knitter drags both ways — set to a Palette entry or to Non-stitch. One
  * primitive at two selection sizes: a single Cell is the span `from === to`.
  *
- * The Chart comes back as a new value rather than a mutation, so a Repaint mid
- * drag can be recomputed from the Chart as it was when the finger went down.
- * Indices outside the Chart are refused: clamping them would paint Cells the
- * knitter never touched, and do it quietly.
+ * A Repaint is the knitter's statement about a Cell, so it is kept as view
+ * state rather than written into the parse: it has to outlive a change of
+ * Separation, and an index into a Palette that is about to change cannot. The
+ * co-ordinates are the ones the knitter sees — the view's — and the guards run
+ * against the view for the same reason.
+ *
+ * New state comes back rather than a mutation, so a Repaint mid drag can be
+ * recomputed from the state as it was when the finger went down. Indices
+ * outside the Chart are refused: clamping them would paint Cells the knitter
+ * never touched, and do it quietly.
  */
-export function repaint(chart, { row, from, to }, entry) {
+export function repaint(chart, state, { row, from, to }, entry) {
+  const shown = view(chart, state);
   // Integers, not merely in range: Row 1.5 is no Row, and would otherwise come
   // back as a Chart with nothing painted — the quiet failure this guard is for.
-  if (!Number.isInteger(row) || row < 1 || row > rowCount(chart))
+  if (!Number.isInteger(row) || row < 1 || row > rowCount(shown))
     throw new Error(`no Row ${row} in this Chart`);
   const [first, last] = from <= to ? [from, to] : [to, from];
-  if (!Number.isInteger(first) || !Number.isInteger(last) || first < 0 || last >= colCount(chart))
+  if (!Number.isInteger(first) || !Number.isInteger(last) || first < 0 || last >= colCount(shown))
     throw new Error(`cells ${first}–${last} are outside this Chart`);
-  // Whole numbers here too: `null >= 0` is true, and a null written into `cells`
-  // is a Cell with no colour that only shows up when something tries to draw it.
+  // Whole numbers here too: `null >= 0` is true, and a null in the overlay is a
+  // Cell with no colour that only shows up when something tries to draw it.
   const known = Number.isInteger(entry) && entry >= 0 && entry < chart.palette.length;
   if (entry !== NON_STITCH && !known)
     throw new Error(`no Palette entry ${entry} in this Chart`);
 
-  const index = rowIndex(chart, row);
-  return {
-    ...chart,
-    cells: chart.cells.map((cells, r) =>
-      r === index ? cells.map((cell, c) => (c >= first && c <= last ? entry : cell)) : cells,
-    ),
-  };
+  const index = rowIndex(shown, row);
+  const overlay = { ...state.overlay };
+  for (let col = first; col <= last; col += 1) overlay[`${index},${col}`] = entry;
+  return { ...state, overlay };
 }
