@@ -541,19 +541,26 @@ function drawFacts() {
  * Row must not have the instructions change under them.
  */
 function drawSeparations() {
-  const offered = separations(chart);
-  separationChoice.hidden = offered.length < 2;
-  separationList.replaceChildren(...offered.map(({ colours }, at) => choosable(colours, at)));
+  const labels = separations(chart).map(({ colours }) => `${colours} colours`);
+  separationChoice.hidden = labels.length < 2;
+  const buttons = () => [...separationList.querySelectorAll("button")];
+  // Built again only when the answers themselves changed, which means another
+  // Chart. Replacing the button the knitter just tapped takes the focus off it,
+  // and someone walking the list by keyboard or screen reader — comparing counts
+  // is the whole point of it — would be dropped out of the list at every tap.
+  if (buttons().map((button) => button.textContent).join() !== labels.join())
+    separationList.replaceChildren(...labels.map(choosable));
+  // `shown`, not `chosenView`: a knitter who has chosen nothing is still reading
+  // the Chart at the parser's default, and that is the answer to mark.
+  for (const [at, button] of buttons().entries())
+    button.setAttribute("aria-pressed", String(at === shown.separation));
 }
 
 /** One answer: the colour count, tappable, marked when it is the one on screen. */
-function choosable(colours, at) {
+function choosable(label, at) {
   const item = document.createElement("li");
   const button = document.createElement("button");
-  button.textContent = `${colours} colours`;
-  // `shown`, not `chosenView`: a knitter who has chosen nothing is still reading
-  // the Chart at the parser's default, and that is the answer to mark.
-  button.setAttribute("aria-pressed", String(at === shown.separation));
+  button.textContent = label;
   button.addEventListener("click", () => adopt({ ...chosenView, separation: at }));
   item.append(button);
   return item;
