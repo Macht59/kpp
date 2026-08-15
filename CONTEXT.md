@@ -18,6 +18,14 @@ _Avoid_: Pixel, square, stitch, section
 One horizontal line of Cells in a Chart, corresponding to one knitted row.
 _Avoid_: Line
 
+**Column**:
+One vertical line of Cells in a Chart. Has no knitting meaning of its own — it exists so a Chart's vertical extent can be talked about.
+_Avoid_: Stitch column, file
+
+**Blank edge**:
+A Row or Column at a Chart's edge that holds no pattern — the white space the image carries around the chart, taken into the crop. Hidden from the Chart the knitter reads, but never removed from it, so it can be shown again. Distinct from Non-stitch, which is background *inside* the silhouette and is yarn's absence rather than the image's margin.
+_Avoid_: Margin, whitespace, border, padding, trim
+
 **Run**:
 A span of consecutive Cells within a Row sharing the same Palette entry.
 _Avoid_: Section, block, group, segment
@@ -40,8 +48,12 @@ _Avoid_: Colours, swatch
 A Palette entry mapped to an actual yarn the knitter will use.
 _Avoid_: Yarn colour, thread
 
+**Separation**:
+How finely a parse divides near colours into distinct Palette entries — whether a light green and a dark green are one entry or two. A parse returns several Separations of the same Chart, coarse to fine, and the knitter picks the one whose Palette matches the yarns in front of them. Choosing a different Separation is not a Re-parse: the Chart does not change, only how many colours it is read as having.
+_Avoid_: Sensitivity, tolerance, threshold, granularity, merge distance
+
 **Repaint**:
-To set a Cell, or a contiguous span of Cells, to a different Palette entry — or to Non-stitch.
+To set a Cell, or a contiguous span of Cells, to a different Palette entry — or to Non-stitch. A Repaint is the knitter's own statement about a Cell, so it outlives a change of Separation.
 _Avoid_: Recolour, fill, edit
 
 **Re-parse**:
