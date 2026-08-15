@@ -248,22 +248,32 @@ function show(parsed) {
   selected = 1;
   reading = chosenReading({});
   picked = null;
-  drawTheChart(); // before the frame: the window is cut to the size of the Chart read
-  frameTheImage();
-  showImage(false);
-  drawFacts();
-  setMode(REVIEW);
-  keepThisChart((parses += 1));
+  // Kept whatever the drawing does, because the parse is the thing that took
+  // ten seconds and a connection, and a Chart that failed to draw is still a
+  // Chart the knitter can open again after an update that fixes the drawing.
+  // The failure itself is not swallowed: it goes on to `parseAndDraw`, which
+  // says so.
+  try {
+    drawTheChart(); // before the frame: the window is cut to the size of the Chart read
+    frameTheImage();
+    showImage(false);
+    drawFacts();
+    setMode(REVIEW);
+  } finally {
+    keepThisChart((parses += 1));
+  }
 }
 
 /**
  * Draw the Chart, showing the Blank edges if hiding them leaves nothing to
  * draw, with the reason said. A Chart that is all white space still has to
  * land on screen: the way to a tighter crop is Re-parse, which is in Review,
- * so a screen cleared of everything would clear the way out with it. Every
- * path that opens a Chart goes through here — a fresh parse that threw instead
- * would be discarded on the way to being kept, which is the one thing this app
- * promises it will not do.
+ * so a screen cleared of everything would clear the way out with it.
+ *
+ * Showing them again is the answer to that one failure, and it is tried for any
+ * failure because it costs a redraw and the alternative is a knitter left with
+ * no Chart. A failure it is no answer to comes back out of here and is said —
+ * the parse it came from is kept either way, by the `finally` in `show`.
  */
 function drawTheChart() {
   try {
