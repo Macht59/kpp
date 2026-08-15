@@ -46,11 +46,46 @@ and `python server.py` must keep serving `web/` exactly as it sits on disk.
 
 **Blocked by:** None.
 
-**Status:** needs-triage
+**Status:** resolved
 
-- [ ] The spec's Out of Scope line is amended to say what is still out — canvas, gestures, end-to-end — rather than reading as "the client is not tested"
-- [ ] The visibility rules that are decisions about state, not about the DOM, are testable without a harness
-- [ ] Tests cover: a chooser hidden when there is one answer, a control that belongs to one mode never offered in the other, the facts line's wording for hidden Rows and Columns, and the Row the knitter lands on after a decision that changes what is hidden
-- [ ] No new dependency, or one that is a devDependency and a test-time requirement only
-- [ ] No build step: `web/` is still served exactly as it sits on disk
-- [ ] Whatever a harness would still catch that this does not is written down, here, rather than left implied
+- [x] The spec's Out of Scope line is amended to say what is still out — canvas, gestures, end-to-end — rather than reading as "the client is not tested"
+- [x] The visibility rules that are decisions about state, not about the DOM, are testable without a harness
+- [x] Tests cover: a chooser hidden when there is one answer, a control that belongs to one mode never offered in the other, the facts line's wording for hidden Rows and Columns, and the Row the knitter lands on after a decision that changes what is hidden
+- [x] No new dependency, or one that is a devDependency and a test-time requirement only
+- [x] No build step: `web/` is still served exactly as it sits on disk
+- [x] Whatever a harness would still catch that this does not is written down, here, rather than left implied
+
+## Answer
+
+**The first shape, as recommended.** `web/screen.js` holds what the client shows
+— `measured`, `paletteWords`, `blankWords`, `separationChoices`,
+`rowAfterAdopting` and `screenFor` — and `web/screen.test.js` covers them under
+Node's runner. No dependency, no harness, no build step; the shell list in
+`sw.js` gained the module and `tests/test_app_shell.py` proves it is served.
+`app.js` keeps the elements and the drawing, and now writes answers rather than
+reaching them: `drawTrim`, `drawSeparations`, `drawFacts`, `setMode` and `adopt`
+each lost their decision to the module.
+
+Suites: 68 JavaScript tests, 97 Python.
+
+One wording change came with it. A Separation of one colour was labelled
+`1 colours`; it shares `paletteWords` with the facts line now and reads
+`1 colour`.
+
+**What a DOM harness would still catch,** which is the honest measure asked for
+above:
+
+- An element renamed or removed in `index.html`, leaving `getElementById` null
+  and a control that silently never updates.
+- A listener never attached, so a button draws correctly and does nothing.
+- A control in the wrong section of the markup. The Separation chooser is Review
+  only *because* it sits inside `#review` — `screenFor` says the section is
+  down in Knit, but nothing asserts the chooser is in that section.
+- The order the drawing functions run in, and anything that reads state one of
+  them has not written yet.
+- Anything about the canvas: what is drawn, where a tap lands, pinch and pan.
+  Still out of scope, still cheap to eyeball.
+
+The first three are a real class and none of them is expensive to hit. They are
+also all *wiring an element to a decision*, which is one shape of bug — worth a
+harness only if one of them ever ships. None has yet.

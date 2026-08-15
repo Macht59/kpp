@@ -376,6 +376,14 @@ enough to read in the test file:
 Row-number inversion (displayed Row 1 is the bottom of the image) is part of
 this module and is tested here, once, so no other test needs to know about it.
 
+**A second module joined it** (ticket 10): `web/screen.js`, holding what the
+client shows rather than what a Chart is — whether a control is worth showing,
+the words it carries, and the Row the knitter lands on after a decision about
+how the Chart is read. Same runner, same rule about dependencies. The line
+between the two is the Chart contract: `chart.js` answers questions about a
+Chart, `screen.js` answers questions about a screen, and `app.js` writes the
+answers into elements without deciding anything.
+
 ## Out of Scope
 
 - **Three of ticket 09's six correction capabilities**, deferred explicitly
@@ -388,7 +396,13 @@ this module and is tested here, once, so no other test needs to know about it.
   flood-fill does not.
 - **Colorway naming.** The contract carries `name`; nothing in v1 writes it.
 - **Browser and end-to-end tests.** Canvas rendering, pinch-zoom and tap
-  hit-testing are expensive to drive and cheap to eyeball.
+  hit-testing are expensive to drive and cheap to eyeball. **Amended by
+  [ticket 10](issues/10-testing-the-clients-wiring.md):** this rules out driving
+  a browser, and was being read as ruling out testing the client at all. What
+  the client *decides* — whether a control is worth showing, what it says, which
+  Row the knitter lands on — is not the DOM and is tested in `web/screen.js`.
+  What remains out of scope is a DOM harness over `index.html`: see that
+  ticket's Answer for the list of what one would still catch.
 - **Hosting and deployment.** The build runs locally. Nothing in the client
   changes between hosting choices, so this is not on the critical path; see
   Further Notes.
