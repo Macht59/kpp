@@ -1,0 +1,12 @@
+{
+  "name": "kpp",
+  "private": true,
+  "version": "0.0.0-development",
+  "description": "Knitting Pattern Parser — release tooling and the web client's test runner. No bundler, no build step: see docs/adr/0004-vanilla-canvas-pwa-client.md",
+  "scripts": {
+    "test": "node --test web/*.test.js"
+  },
+  "devDependencies": {
+    "semantic-release": "^25.0.0"
+  }
+}

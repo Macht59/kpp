@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kpp
+  labels:
+    app: kpp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kpp
+  template:
+    metadata:
+      labels:
+        app: kpp
+    spec:
+      containers:
+        - name: kpp
+          # Moved by CI after a release, never by hand. See ADR-0005.
+          image: ghcr.io/macht59/kpp:0.1.0
+          ports:
+            - name: http
+              containerPort: 8000
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              # scipy on the largest chart in the corpus is the only thing here
+              # that can plausibly be OOMKilled, and an OOMKill mid-parse is a
+              # worse failure than a slow parse. CI cannot catch it: the runner
+              # has no memory cap.
+              cpu: "2"
+              memory: 2Gi
+          # `/` serves the client's index.html off disk. No health endpoint
+          # exists, because an endpoint whose only caller is a probe is a second
+          # thing to keep true.
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 30

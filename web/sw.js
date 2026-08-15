@@ -7,7 +7,10 @@
 // sync queue behind it, which would be infrastructure for something a knitter
 // does once per Chart, at a table, on wifi.
 
-const VERSION = "kpp-shell-1"; // bumped when a shell file changes, which drops the old cache
+// Stamped with the release version at image build (see the Dockerfile), so every
+// release drops the old cache. The literal below is what local development and
+// the tests see; keep the `kpp-shell-` prefix, the build rewrites the whole string.
+const VERSION = "kpp-shell-dev";
 
 const SHELL = ["/", "/app.js", "/chart.js", "/crop.js", "/library.js", "/manifest.webmanifest", "/icon.png"];
 

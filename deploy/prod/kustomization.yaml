@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# No namespace and no hostname: the Flux Kustomization in the private gitops repo
+# supplies `targetNamespace`, and the Ingress that names the host lives there
+# too. See ADR-0005.
+resources:
+  - deployment.yaml
+  - service.yaml

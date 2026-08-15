@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      # The corpus lives in git, so these do not skip: four real chart
+      # screenshots, parsed for real.
+      - run: python -m pytest tests/
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: npm test
+
+      # Built, never pushed. A base image that moved under us fails here, on the
+      # pull request, rather than after a version has already been cut.
+      - run: docker build --build-arg APP_VERSION=ci -t kpp:ci .
+
+  release:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      published: ${{ steps.release.outputs.published }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # semantic-release reports what it did through the tag it creates, so the
+      # tag before and after is what the image job is gated on. No release means
+      # no new tag, and nothing downstream runs.
+      - id: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          before=$(git tag --list 'v*' --sort=-v:refname | head -1)
+          npx semantic-release
+          after=$(git tag --list 'v*' --sort=-v:refname | head -1)
+          if [ "$before" != "$after" ] && [ -n "$after" ]; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "version=${after#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  image:
+    needs: release
+    if: needs.release.outputs.published == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    env:
+      VERSION: ${{ needs.release.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          build-args: APP_VERSION=${{ env.VERSION }}
+          tags: |
+            ghcr.io/macht59/kpp:${{ env.VERSION }}
+            ghcr.io/macht59/kpp:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Only now, with the image in the registry. Flux reconciles this repo every
+      # 60 seconds, so a tag written before the push is an ImagePullBackOff that
+      # lasts until the build finishes. `chore` cuts no release, so this commit
+      # cannot feed back into the release job.
+      - name: Point the manifest at the new image
+        run: |
+          sed -i "s|image: ghcr.io/macht59/kpp:.*|image: ghcr.io/macht59/kpp:${VERSION}|" deploy/prod/deployment.yaml
+          if git diff --quiet; then
+            echo "deploy/prod already names ${VERSION} — nothing to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore(deploy): kpp ${VERSION} [skip ci]"
+          git pull --rebase origin master
+          git push origin HEAD:master

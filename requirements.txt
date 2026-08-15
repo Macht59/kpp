@@ -5,6 +5,7 @@ pillow
 
 # web
 flask
+gunicorn  # the image's server; `python server.py` stays the development one
 
 # tests
 pytest

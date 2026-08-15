@@ -91,8 +91,11 @@ The client is plain ES modules and a canvas in `web/` — no build step, per
 under Node's own runner, a test-time requirement and never a build step:
 
 ```bash
-node --test "web/*.test.js"
+npm test        # node --test "web/*.test.js"
 ```
+
+The `package.json` those two lines imply holds the release tooling and nothing
+else — no bundler, no dependency the browser ever sees.
 
 `POST /api/parse` takes
 the image as a multipart upload plus the crop as `x, y, w, h`, and returns the
@@ -101,8 +104,33 @@ own message, because every one of them is something the knitter can act on; an
 upload over 20 MB is refused with a 413 rather than truncated and parsed into a
 plausible, wrong Chart.
 
-The corpus tests need the chart screenshots in `tests/examples/` (not in git —
-see [the manifest](tests/examples/MANIFEST.md)); they skip without them.
+The corpus tests parse the four chart screenshots in `tests/examples/` (in git,
+described by [the manifest](tests/examples/MANIFEST.md)); they skip if a file is
+missing rather than fail.
+
+## Releases and deployment
+
+A push to `master` runs both suites, and semantic-release reads the
+conventional-commit history to decide whether there is a version in it. A `feat`
+or `fix` cuts one; a `docs` or `chore` cuts nothing. When a version is cut, the
+image is built and pushed to `ghcr.io/macht59/kpp` as `X.Y.Z` and `latest` — and
+only after that push succeeds does CI commit the new tag into
+`deploy/prod/deployment.yaml`. FluxCD, watching this repository from a private
+gitops repo, reconciles the change into the cluster within a minute. There is no
+`CHANGELOG.md`; the notes are on the GitHub Release. The whole path is
+[ADR-0005](docs/adr/0005-delivery-releases-images-and-flux.md).
+
+`deploy/prod/` holds the Deployment, the Service and a `kustomization.yaml`, and
+names no namespace and no hostname — both are supplied from the private repo,
+which is also where the `Ingress` lives. Nothing here says where the app is
+hosted.
+
+The image runs gunicorn rather than `app.run`, because a parse is seconds of
+scipy and a single-threaded server would make the app look offline to the next
+request — the one thing this app must not lie about. It also stamps the release
+version into the service worker's cache name at build time, so a release hands a
+knitter the new shell instead of the cached old one. `python server.py` locally
+is untouched by both.
 
 Two limits are known and recorded in the tests rather than papered over.
 Yarns used for a handful of Cells in a large Chart merge into their neighbours,

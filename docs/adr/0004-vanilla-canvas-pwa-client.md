@@ -1,6 +1,8 @@
 # The client is a no-build vanilla + canvas PWA
 
-The web client is plain ES modules, a `<canvas>`, and a service worker. No framework, no bundler, no `package.json`. It installs to the home screen and works offline for everything except parsing.
+The web client is plain ES modules, a `<canvas>`, and a service worker. No framework, no bundler, no build step. It installs to the home screen and works offline for everything except parsing.
+
+**Amended by [ADR-0005](0005-delivery-releases-images-and-flux.md): there is now a `package.json`.** It holds semantic-release and its plugins as pinned devDependencies, and names the web suite as `npm test`. No client code passes through it: nothing is bundled, nothing is transpiled, and `python server.py` still serves `web/` exactly as it sits on disk. The claim this ADR was making was never really "no manifest file" — it was no toolchain between the source and the browser, and that still holds. The one build-time transformation that exists, stamping the release version into the service worker's cache name, happens inside the Docker build and never touches the working tree.
 
 A reader will expect a framework here, because almost every mobile-first web app built now has one, and because the repo is otherwise a normal Python project that could have hosted a normal Vite app beside it.
 
