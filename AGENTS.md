@@ -12,6 +12,30 @@ Issues live as markdown files under `.scratch/<feature>/` in this repo. See `doc
 
 The five canonical roles, each label string equal to its name. See `docs/agents/triage-labels.md`.
 
+### Commit messages
+
+Always write Conventional Commits — semantic-release parses them with the
+default Angular preset, so the type decides whether a release happens.
+
+```
+<type>(<optional scope>): <subject>
+
+<optional body>
+
+<optional footer>
+```
+
+- `feat` — minor version. `fix` and `perf` — patch version.
+- `docs`, `refactor`, `test`, `style`, `build`, `ci`, `chore` — no release.
+- A `BREAKING CHANGE: <what broke>` footer, or `!` after the type
+  (`feat!:`), cuts a major version.
+- Subject in the imperative, lower-case type, no trailing period.
+- Scope is the touched area (`web`, `parser`, `deploy`) — optional but preferred.
+- Reference issues in the footer (`Refs: .scratch/<feature>/<issue>.md`).
+
+Never invent a type outside that list, and never bury a user-visible change
+under a non-releasing type — an unreleased `fix` never reaches production.
+
 ### Delivery
 
 `master` releases itself: semantic-release cuts the version, CI pushes the image
