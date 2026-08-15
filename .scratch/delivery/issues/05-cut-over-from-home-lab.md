@@ -40,14 +40,14 @@ is not described by any of the three repositories.
 
 **Blocked by:** 04 — The manifests and the moving tag.
 
-**Status:** ready-for-human
+**Status:** resolved
 
 - [x] `../gitops` has `clusters/local-cluster/istarhorse/prod/kpp/` with a `GitRepository`, a `Kustomization` and an `Ingress`
 - [x] `kpp.istarhorse.com` is in the `istarhorse-prod` `Certificate`'s `dnsNames`
 - [x] The app is listed in the prod `kustomization.yaml`
 - [x] `../home-lab` loses `deploy/kpp.yaml`, its `kustomization.yaml` entry and its `dnsNames` entry
 - [x] Both outside repositories are committed and left unpushed
-- [ ] The home-lab removal is pushed only after the new pods are confirmed serving
+- [x] The home-lab removal is pushed only after the new pods are confirmed serving
 
 ## Comments
 
@@ -74,3 +74,18 @@ only then push `../home-lab`. The agent has no cluster credentials here
 (`kubectl` reports `the server has asked for the client to provide credentials`),
 so the confirmation step cannot be automated from this machine. The box at
 `192.168.30.118:8004` is retired by hand afterwards.
+
+**Cut over.** Both outside repositories are pushed and level with their remotes:
+`../gitops` at `Deploy kpp in istarhorse-prod`, `../home-lab` at `Remove kpp: it
+runs in the cluster now`, in that order.
+
+`https://kpp.istarhorse.com/` answers 200 with `server: gunicorn` and serves
+`index.html`, and `POST /api/parse` with no image answers the app's own 400 — so
+the host resolves to the container image, not the old box. The home-lab `Ingress`
+and `Endpoints` are gone from git, so nothing else claims the host. This is the
+outside-in check; there are still no cluster credentials on this machine, so
+`kubectl get pods -n istarhorse-prod` remains a maintainer's command.
+
+**Still by hand:** the box at `192.168.30.118:8004` answers 200 on its own port
+and is now serving nobody. Retiring it is the last step, and no repository
+describes it.
