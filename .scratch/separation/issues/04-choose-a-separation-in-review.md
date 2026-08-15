@@ -2,7 +2,7 @@
 
 **Blocked by:** 02 — Hide Blank edges; 03 — Parser returns every Separation; client reads v2.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **What to build:** the customer's headline request, and the first ticket in this
 feature the knitter can see.
@@ -45,14 +45,45 @@ Note for whoever picks this up: under v2 `palette` holds the finest Separation,
 15–40 near-duplicate entries. Anything that shows `palette` to a knitter without
 going through a Separation is a bug, and it will look like working code.
 
-- [ ] Review shows the available Separations, labelled by colour count, current one marked
-- [ ] Tapping one redraws the Chart with no parse and no wait
-- [ ] The Palette entry count in the facts line is the chosen Separation's full count, and moves as the knitter switches
-- [ ] The default on a fresh parse is the parser's default Separation, and matches what the app rendered before this feature
-- [ ] The list is hidden when a Chart has one Separation, including every Chart parsed before this shipped
-- [ ] The list appears in Review only, never in Knit
-- [ ] The chosen Separation persists per Chart and comes back on reopen
-- [ ] A Repaint made at one Separation is still there after switching, in both directions
-- [ ] A Repaint to Non-stitch survives a switch equally
-- [ ] Blank edge extent recomputes against the chosen Separation; the knitter's show/hide decision does not
-- [ ] Tests cover the customer's bug directly: two greens are one Run at the coarse Separation and two Runs at the fine one — synthetically, since no corpus chart reproduces it
+- [x] Review shows the available Separations, labelled by colour count, current one marked
+- [x] Tapping one redraws the Chart with no parse and no wait
+- [x] The Palette entry count in the facts line is the chosen Separation's full count, and moves as the knitter switches
+- [x] The default on a fresh parse is the parser's default Separation, and matches what the app rendered before this feature
+- [x] The list is hidden when a Chart has one Separation, including every Chart parsed before this shipped
+- [x] The list appears in Review only, never in Knit
+- [x] The chosen Separation persists per Chart and comes back on reopen
+- [x] A Repaint made at one Separation is still there after switching, in both directions
+- [x] A Repaint to Non-stitch survives a switch equally
+- [x] Blank edge extent recomputes against the chosen Separation; the knitter's show/hide decision does not
+- [x] Tests cover the customer's bug directly: two greens are one Run at the coarse Separation and two Runs at the fine one — synthetically, since no corpus chart reproduces it
+
+## Comments
+
+**Shipped** in `feat(web): Let a knitter pick how many colours a Chart is read as`,
+with `fix(web): Keep the focus on the Separation the knitter tapped` and
+`perf(web): Derive the Chart once per pointer move of a paint drag` after it.
+
+`drawSeparations` lists the answers by colour count inside `#separation`, which
+sits in the Review section and so never appears in Knit, and hides itself when a
+Chart offers fewer than two — which is every Chart parsed before this shipped.
+The marked one is `shown.separation`, the Separation actually being read, so a
+knitter who has chosen nothing still sees the parser's default marked. Tapping
+calls `adopt`, which re-derives from the Chart already on the device: no upload,
+no wait. The facts line shows the chosen Separation's full entry count and moves
+with it, which is the loop the knitter closes against their yarns.
+
+Repaints hold because ticket 01 made them a statement about a Cell: they are
+stored at the finest Separation — the finest entry of the tapped swatch that most
+Cells sit in, so a switch to a finer answer shows the colour it mostly was — and
+Non-stitch is stored as itself. Blank edge extent is cached per Separation and
+recomputed when it changes, while the knitter's show/hide decision stays put;
+`adopt` renumbers `selected` by the change in hidden Rows so they stay on the Row
+they were on.
+
+The customer's bug is asserted directly in `web/chart.test.js`: two greens are
+one Run at the coarse Separation and two at the fine one.
+
+The DOM half of this ticket — the list, its marking and its Review-only placement
+— was checked by reading `web/app.js` and `web/index.html`, not by a test; the
+client has no DOM test harness, and `node --test web/*.test.js` covers `chart.js`
+only.

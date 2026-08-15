@@ -2,7 +2,7 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **What to build:** nothing the knitter can see. This is the prefactor both
 features in [the spec](../spec.md) sit on — "make the change easy, then make the
@@ -39,13 +39,32 @@ The three view-state fields persist per Chart in the library alongside
 `selected` and `reading`. The library's record already takes arbitrary fields,
 so this is the client deciding to write them.
 
-- [ ] `view(chart, state)` returns a Chart the existing chart functions consume unchanged
-- [ ] Every place the client draws, reads out or counts goes through `view`, not the stored Chart
-- [ ] `repaint` returns view state with `overlay` updated, not a rewritten Chart
-- [ ] A Repaint's coordinates are the ones the knitter sees
-- [ ] `repaint`'s existing guards still refuse a non-integer Row, an out-of-bounds span, and an unknown Palette entry — with the same messages
-- [ ] A Repaint to Non-stitch is stored in the overlay like any other
-- [ ] `separation`, `trimmed` and `overlay` persist per Chart and come back on reopen
-- [ ] A Chart Repainted, closed and reopened shows the same Cells it did before
-- [ ] The existing test suites stay green — this ticket changes no behaviour
-- [ ] New tests cover the overlay round-trip through `view`, and that `runsOfRow` over a view matches what it returned over the raw Chart
+- [x] `view(chart, state)` returns a Chart the existing chart functions consume unchanged
+- [x] Every place the client draws, reads out or counts goes through `view`, not the stored Chart
+- [x] `repaint` returns view state with `overlay` updated, not a rewritten Chart
+- [x] A Repaint's coordinates are the ones the knitter sees
+- [x] `repaint`'s existing guards still refuse a non-integer Row, an out-of-bounds span, and an unknown Palette entry — with the same messages
+- [x] A Repaint to Non-stitch is stored in the overlay like any other
+- [x] `separation`, `trimmed` and `overlay` persist per Chart and come back on reopen
+- [x] A Chart Repainted, closed and reopened shows the same Cells it did before
+- [x] The existing test suites stay green — this ticket changes no behaviour
+- [x] New tests cover the overlay round-trip through `view`, and that `runsOfRow` over a view matches what it returned over the raw Chart
+
+## Comments
+
+**Shipped** in `refactor(web): Read the Chart through a view, keep Repaints in an overlay`.
+
+`view(chart, {separation, trimmed, overlay})` is in `web/chart.js` and returns a
+Chart in the shape `rowCount`, `colCount`, `cellsOfRow`, `runsOfRow`, `rowIndex`,
+`rowNumber`, `entryLabel` and `readingDirection` already consumed — none of them
+changed. `web/app.js` holds `shown = view(chart, chosenView)` and draws, reads
+out and counts from that; it touches `chart.cells` nowhere.
+
+`repaint` returns `{...state, overlay}` with the Repaint keyed by stored Row and
+Column, coordinates taken from the view the knitter sees, guards and messages
+carried over word for word, and Non-stitch stored like any other entry. The three
+fields ride along to the library in `persist` (`{chart, selected, reading,
+...chosenView}`) and come back through `keptView` on open.
+
+The state stayed inert only until tickets 02 and 03 landed on it, which is what
+it was for.

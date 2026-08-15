@@ -2,7 +2,7 @@
 
 **Blocked by:** 01 — Route the client through a Chart view, Repaints into an overlay.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **What to build:** again nothing the knitter can see, deliberately. This lays the
 data ticket 04 needs and proves it changed nothing on the way.
@@ -58,16 +58,40 @@ Refusing v1 Charts would tell knitters their existing library was "saved by a
 newer version of this app", which is both wrong and expensive. The client
 renders the default Separation, so a knitter sees precisely what they see today.
 
-- [ ] `parse_chart` keeps its signature — image and crop, nothing else
-- [ ] Parses return `schema_version: 2` with a non-empty `separations`, `default_separation`, and one threshold per Separation in `source`
-- [ ] At most eight Separations, chosen by plateau width, ordered coarse to fine
-- [ ] `palette` and `cells` are cut at the finest selected Separation
-- [ ] Every `merge` has one entry per finest Palette entry, and its distinct values are exactly `0..colours-1` — a gap would be a Palette with a hole
-- [ ] Separations nest: two finest entries merged at one Separation are never split apart at a coarser one
-- [ ] The colour count at `default_separation` equals the corpus ground truth — the existing Palette-size assertion, re-pointed
-- [ ] The corpus ground-truth colour count appears among the offered Separations
-- [ ] A chart whose sweep yields one plateau returns exactly one Separation — covered synthetically, since the corpus has no such case
-- [ ] `confidence.cells` is unchanged in shape and computed at the default Separation
-- [ ] The client accepts `schema_version` 1 and 2, and refuses anything higher with the existing message
-- [ ] A v1 Chart lifts to a single-Separation view and opens exactly as it did before
-- [ ] A freshly parsed v2 Chart renders identically to what the app renders today
+- [x] `parse_chart` keeps its signature — image and crop, nothing else
+- [x] Parses return `schema_version: 2` with a non-empty `separations`, `default_separation`, and one threshold per Separation in `source`
+- [x] At most eight Separations, chosen by plateau width, ordered coarse to fine
+- [x] `palette` and `cells` are cut at the finest selected Separation
+- [x] Every `merge` has one entry per finest Palette entry, and its distinct values are exactly `0..colours-1` — a gap would be a Palette with a hole
+- [x] Separations nest: two finest entries merged at one Separation are never split apart at a coarser one
+- [x] The colour count at `default_separation` equals the corpus ground truth — the existing Palette-size assertion, re-pointed
+- [x] The corpus ground-truth colour count appears among the offered Separations
+- [x] A chart whose sweep yields one plateau returns exactly one Separation — covered synthetically, since the corpus has no such case
+- [x] `confidence.cells` is unchanged in shape and computed at the default Separation
+- [x] The client accepts `schema_version` 1 and 2, and refuses anything higher with the existing message
+- [x] A v1 Chart lifts to a single-Separation view and opens exactly as it did before
+- [x] A freshly parsed v2 Chart renders identically to what the app renders today
+
+## Comments
+
+**Shipped** in `feat(parser): Return every Separation the sweep supports, read v2 on device`.
+
+`parse_chart(image, crop)` keeps its signature — there is no sensitivity
+argument. `_plateau_thresholds` keeps the widest eight plateaus of the ΔE sweep,
+orders them coarse to fine and names the widest as `default_separation`;
+`palette` and `cells` are cut at the finest of them and each Separation carries a
+`merge` onto it, with one threshold per Separation in `source`. `margin` — and so
+`confidence.cells` — is still computed once, at the default.
+
+`tests/test_parse_chart.py` asserts the contract over the corpus: the merges
+cover the finest Palette with no hole, the Separations nest rather than
+reshuffle, the default's colour count is the ground truth and the ground truth is
+among the answers offered. The single-plateau case has no corpus example, so it
+is asserted synthetically in `tests/test_synthetic_chart.py`.
+
+On the client `SCHEMA_VERSIONS = [1, 2]` and anything else is refused with the
+message it always used; `separations()` lifts a v1 Chart to the single identity
+Separation it always was. A Separation's Palette is derived by averaging the
+finest entries it merges, weighted by Cell count — that weighting is what makes
+the default Separation render as the parser's old answer did, since averaging
+evenly dragged a white of 252 down to 236 on the corpus.
