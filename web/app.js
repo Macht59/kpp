@@ -245,12 +245,31 @@ function show(parsed) {
   selected = 1;
   reading = chosenReading({});
   picked = null;
-  redraw(); // before the frame: the window is cut to the size of the Chart being read
+  drawTheChart(); // before the frame: the window is cut to the size of the Chart read
   frameTheImage();
   showImage(false);
   drawFacts();
   setMode(REVIEW);
   keepThisChart((parses += 1));
+}
+
+/**
+ * Draw the Chart, showing the Blank edges if hiding them leaves nothing to
+ * draw, with the reason said. A Chart that is all white space still has to
+ * land on screen: the way to a tighter crop is Re-parse, which is in Review,
+ * so a screen cleared of everything would clear the way out with it. Every
+ * path that opens a Chart goes through here — a fresh parse that threw instead
+ * would be discarded on the way to being kept, which is the one thing this app
+ * promises it will not do.
+ */
+function drawTheChart() {
+  try {
+    redraw();
+  } catch (failure) {
+    chosenView = { ...chosenView, trimmed: false };
+    say(error, failure.message);
+    redraw();
+  }
 }
 
 /**
@@ -275,6 +294,22 @@ async function keepThisChart(mine) {
     await drawLibrary();
   } catch (failure) {
     say(error, failure.message);
+  }
+}
+
+/**
+ * The Row a kept Chart opens on. A record written before Blank edges were ever
+ * hidden numbered its Row against the whole Chart, and opens hidden now — so
+ * the Row the knitter stopped on has moved down by the blank Rows beneath it.
+ * That is the same renumbering `showBlanks` does when they hide the edges by
+ * hand, and without it a knitter comes back to a Row they were never on.
+ */
+function openingRow(kept, state) {
+  if (kept.trimmed !== undefined || !state.trimmed) return kept.selected;
+  try {
+    return Math.max(kept.selected - view(kept.chart, state).blank.bottom, 1);
+  } catch {
+    return kept.selected; // nothing but white space: this Chart opens whole anyway
   }
 }
 
@@ -404,7 +439,7 @@ async function openChart(id) {
   openId = id;
   chart = kept.chart;
   chosenView = keptView(kept);
-  selected = kept.selected;
+  selected = openingRow(kept, chosenView);
   reading = kept.reading;
   constructionChoice.value = reading.construction;
   startChoice.value = reading.start;
@@ -423,16 +458,7 @@ async function openChart(id) {
   stage.hidden = true;
   crop = null;
   rectangle.disabled = whole.disabled = true;
-  try {
-    redraw();
-  } catch (failure) {
-    // A Chart that is nothing but white space is opened whole, with the reason
-    // said: the way to a tighter crop is Re-parse, which is in Review, so a
-    // screen cleared of everything would clear the way out with it.
-    chosenView = { ...chosenView, trimmed: false };
-    say(error, failure.message);
-    redraw();
-  }
+  drawTheChart();
   frameTheImage();
   showImage(false);
   drawFacts();
