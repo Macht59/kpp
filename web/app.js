@@ -969,7 +969,10 @@ function cellAt(canvas, event) {
  */
 function paintTo(col) {
   const span = { row: painting.row, from: painting.from, to: col };
-  chosenView = repaint(chart, painting.base, span, picked);
+  // The Chart on screen, handed back: it is the same bounds and the same Blank
+  // edges as a view of `painting.base`, and deriving a second one per pointer
+  // move is exactly the cost this function is written to avoid.
+  chosenView = repaint(chart, painting.base, span, picked, shown);
   shown = view(chart, chosenView);
   drawRowOfCells(reviewChart, rowIndex(shown, painting.row));
 }

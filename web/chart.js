@@ -310,9 +310,14 @@ const offset = (shown) => (shown.trimmed ? shown.blank : { top: 0, left: 0 });
  * recomputed from the state as it was when the finger went down. Indices
  * outside the Chart are refused: clamping them would paint Cells the knitter
  * never touched, and do it quietly.
+ *
+ * A caller dragging a finger across a Row has the Chart derived already, and
+ * hands it back rather than paying for a second derivation of it on every
+ * pointer move. Only the bounds and the Blank edges are read from it, and a
+ * Repaint moves neither: the edges are measured from the parse, not from the
+ * Repaints over it. So any view of this Chart at this Separation will do.
  */
-export function repaint(chart, state, { row, from, to }, entry) {
-  const shown = view(chart, state);
+export function repaint(chart, state, { row, from, to }, entry, shown = view(chart, state)) {
   // Integers, not merely in range: Row 1.5 is no Row, and would otherwise come
   // back as a Chart with nothing painted — the quiet failure this guard is for.
   if (!Number.isInteger(row) || row < 1 || row > rowCount(shown))

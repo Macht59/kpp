@@ -593,6 +593,19 @@ test("a Repaint at a coarse Separation records the colour the swatch mostly was"
   assert.deepEqual(cellsOfRow(view(mostly, { ...painted, separation: 1 }), 1), [3, 3, 3, 3]);
 });
 
+test("a Repaint handed the Chart already derived lands on the same Cells", () => {
+  // What a paint drag does on every pointer move: the view it is drawing is the
+  // one the Repaint is guarded against, so deriving a second is waste. Handed a
+  // view carrying Repaints of its own — the drag so far — it still lands on the
+  // Cell the finger is over, because bounds and Blank edges do not move with a
+  // Repaint.
+  const span = { row: 1, from: 0, to: 1 };
+  const alone = repaint(MARGINED, TRIMMED, span, 1);
+  const painted = view(MARGINED, alone);
+  assert.deepEqual(repaint(MARGINED, TRIMMED, span, 1, painted), alone);
+  assert.throws(() => repaint(MARGINED, TRIMMED, { ...span, to: 9 }, 1, painted), /outside/);
+});
+
 test("a Repaint to Non-stitch survives a Separation switch equally", () => {
   // "not yarn" is a statement no colour decision can undo
   const carved = repaint(SEPARATED, COARSE, { row: 1, from: 0, to: 1 }, -1);
