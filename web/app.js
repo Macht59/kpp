@@ -17,6 +17,7 @@ import {
   rowIndex,
   rowNumber,
   runsOfRow,
+  separations,
   view,
 } from "./chart.js";
 import { corners, grabbedAnchor, rectFrom, wholePixels } from "./crop.js";
@@ -47,6 +48,8 @@ const size = document.getElementById("size");
 const trim = document.getElementById("trim");
 const trimWords = document.getElementById("trim-words");
 const showBlanks = document.getElementById("show-blanks");
+const separationChoice = document.getElementById("separation");
+const separationList = document.getElementById("separations");
 const paletteSize = document.getElementById("palette-size");
 const paletteList = document.getElementById("palette");
 const paintHint = document.getElementById("paint-hint");
@@ -522,8 +525,75 @@ function drawFacts() {
   );
   doubt.hidden = !cropIsDoubtful(chart);
   drawTrim();
+  drawSeparations();
   showArmed();
 }
+
+/**
+ * The answers the parse offered for how many colours this Chart has, labelled by
+ * the count the knitter can hold against the yarns on the table, with the one
+ * being read marked. The count above moves as they switch, and that movement is
+ * the whole loop: they stop when it matches what they can see.
+ *
+ * Hidden when the parse offered one answer — which is every Chart parsed before
+ * Separations existed — because a list of one is a control that does nothing.
+ * Review only: switching rewrites every Readout in the Chart, and a knitter mid
+ * Row must not have the instructions change under them.
+ */
+function drawSeparations() {
+  const offered = separations(chart);
+  separationChoice.hidden = offered.length < 2;
+  separationList.replaceChildren(...offered.map(({ colours }, at) => choosable(colours, at)));
+}
+
+/** One answer: the colour count, tappable, marked when it is the one on screen. */
+function choosable(colours, at) {
+  const item = document.createElement("li");
+  const button = document.createElement("button");
+  button.textContent = `${colours} colours`;
+  // `shown`, not `chosenView`: a knitter who has chosen nothing is still reading
+  // the Chart at the parser's default, and that is the answer to mark.
+  button.setAttribute("aria-pressed", String(at === shown.separation));
+  button.addEventListener("click", () => adopt({ ...chosenView, separation: at }));
+  item.append(button);
+  return item;
+}
+
+/**
+ * Take up a decision about how this Chart is read — which Separation, or whether
+ * the Blank edges are hidden. No parse and no wait: the Chart is derived from
+ * the one already on the device. A decision that would leave nothing to draw is
+ * refused with the reason and nothing changes, because a Chart cannot go off the
+ * screen under the knitter's finger.
+ */
+function adopt(wanted) {
+  let next;
+  try {
+    next = view(chart, wanted);
+  } catch (failure) {
+    return say(error, failure.message);
+  }
+  // Row 1 is the bottom of the Chart, so the blank Rows hidden beneath it
+  // renumber every Row above — whether the knitter hid them by hand or a finer
+  // Separation stopped counting one of them as white. The knitter stays on the
+  // Row they were on either way.
+  selected = Math.max(selected + hiddenBelow(shown) - hiddenBelow(next), 1);
+  // An entry of a Palette that is about to be shorter is armed at nothing.
+  if (picked !== null && picked >= next.palette.length) picked = null;
+  const resized = rowCount(next) !== rowCount(shown) || colCount(next) !== colCount(shown);
+  chosenView = wanted;
+  say(error, null);
+  redraw(); // before the frame: the window is cut to the size of the Chart being read
+  frameTheImage();
+  drawFacts();
+  // A Chart of another size is another survey; one of the same size is the same
+  // Chart in other colours, and throwing the knitter's zoom away mid-comparison
+  // is the opposite of instant.
+  if (resized) resetView();
+}
+
+/** How many Rows sit hidden beneath Row 1 — none, when nothing is hidden. */
+const hiddenBelow = (chart) => (chart.trimmed ? chart.blank.bottom : 0);
 
 /**
  * What the crop caught beyond the pattern, and the way to have it back. A Chart
@@ -543,24 +613,9 @@ const blanks = (count, line) => count && `${count} blank ${line}${count === 1 ? 
 
 // Hiding is a default and not a rule: the knitter whose pattern has a white edge
 // Row shows it again here, and that decision is kept with the Chart.
-showBlanks.addEventListener("click", () => {
-  const wanted = { ...chosenView, trimmed: !chosenView.trimmed };
-  try {
-    view(chart, wanted); // a Chart that is all white space cannot be shown trimmed
-  } catch (failure) {
-    return say(error, failure.message);
-  }
-  // Row 1 is the bottom of the Chart, so hiding the Blank edges under it
-  // renumbers every Row above: the knitter stays on the Row they were on.
-  const shift = shown.blank.bottom * (wanted.trimmed ? -1 : 1);
-  selected = Math.max(selected + shift, 1);
-  chosenView = wanted;
-  say(error, null);
-  redraw(); // before the frame: the window is cut to the size of the Chart being read
-  frameTheImage();
-  drawFacts();
-  resetView();
-});
+showBlanks.addEventListener("click", () =>
+  adopt({ ...chosenView, trimmed: !chosenView.trimmed }),
+);
 
 /**
  * One Palette entry: the count of entries the eye catches rather than reads, and

@@ -18,6 +18,7 @@ import {
   rowIndex,
   rowNumber,
   runsOfRow,
+  separations,
   view,
 } from "./chart.js";
 
@@ -510,6 +511,25 @@ test("a v2 Chart is read at the parser's default Separation until the knitter ch
     [1, 1, 1, 1],
     [2, 2, 2, 2],
   ]);
+});
+
+test("a view says which Separation it was read at, chosen or defaulted", () => {
+  // what a chooser marks as current: a Chart nobody has decided anything about
+  // is being read at the parser's default, and the mark belongs on that
+  assert.equal(view(SEPARATED, COARSE).separation, 0);
+  assert.equal(view(SEPARATED, FINE).separation, 1);
+  assert.equal(view(NEARLY, COARSE).separation, 1); // this one's default is the fine one
+  assert.equal(view(SEPARATED, { ...COARSE, separation: 7 }).separation, 0); // no such answer
+});
+
+test("the Separations offered are the Chart's, coarse to fine, and one for a v1 Chart", () => {
+  // A single answer is nothing to choose between, so this is also what tells the
+  // client there is no chooser worth showing.
+  assert.deepEqual(
+    separations(SEPARATED).map((offered) => offered.colours),
+    [3, 4],
+  );
+  assert.deepEqual(separations(CHART), [{ colours: 3, merge: [0, 1, 2] }]);
 });
 
 test("the two greens are one Run at the coarse Separation and two at the fine one", () => {

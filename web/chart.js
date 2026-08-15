@@ -176,11 +176,13 @@ function blankEdgesOf(chart, { index, palette, read }) {
 }
 
 /**
- * The Separations a Chart offers, coarse to fine. A Chart parsed before
- * Separations existed offers exactly one — its own Palette, merged with
- * nothing — so v1 is read here as the v2 Chart it always was.
+ * The Separations a Chart offers, coarse to fine — what the knitter chooses
+ * between, labelled by the colour count they can check against the yarns in
+ * front of them. A Chart parsed before Separations existed offers exactly one —
+ * its own Palette, merged with nothing — so v1 is read here as the v2 Chart it
+ * always was, and a chooser is simply never worth showing for it.
  */
-const separationsOf = (chart) =>
+export const separations = (chart) =>
   chart.separations ?? [
     { colours: chart.palette.length, merge: chart.palette.map((_, entry) => entry) },
   ];
@@ -191,11 +193,11 @@ const separationsOf = (chart) =>
  * re-parsed under it — falls back to the default rather than refusing to draw.
  */
 function separationOf(chart, chosen) {
-  const separations = separationsOf(chart);
+  const offered = separations(chart);
   // One index for both the Separation and the Blank-edge cache, so a default
   // that indexes nothing either cannot key edges belonging to another answer.
-  const index = [chosen, chart.default_separation, 0].find((at) => separations[at]);
-  return { index, ...separations[index] };
+  const index = [chosen, chart.default_separation, 0].find((at) => offered[at]);
+  return { index, ...offered[index] };
 }
 
 /**
@@ -275,7 +277,10 @@ export function view(chart, { separation, trimmed = false, overlay = {} } = {}) 
     cells.map((cell, c) => read(overlay[`${r},${c}`] ?? cell)),
   );
   const blank = blankEdgesOf(chart, { index, palette, read });
-  const shown = { ...chart, palette, blank, trimmed };
+  // The Separation actually read at, which is the knitter's only when they have
+  // chosen one — a chooser marking their choice rather than the answer on screen
+  // would mark nothing at all on a Chart they have never touched.
+  const shown = { ...chart, palette, blank, trimmed, separation: index };
   if (!trimmed) return { ...shown, cells: painted };
   const cells = painted
     .slice(blank.top, painted.length - blank.bottom)

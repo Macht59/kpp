@@ -85,7 +85,12 @@
   #cropped img { display: block; max-width: none; }
   #size { font-size: 1.25rem; }
   #palette-size { margin: 0; font-size: 1.25rem; font-weight: 700; } /* nine entries coming back as seven is silent otherwise */
-  #palette, #chip-palette { display: flex; flex-wrap: wrap; gap: 0.4rem; list-style: none; margin: 0; padding: 0; }
+  #palette, #chip-palette, #separations { display: flex; flex-wrap: wrap; gap: 0.4rem; list-style: none; margin: 0; padding: 0; }
+  #separation { display: flex; flex-direction: column; gap: 0.4rem; }
+  #separation-hint { margin: 0; opacity: 0.8; }
+  /* Counts, not colours: the knitter chooses by comparing against the yarns on
+     the table, so each is wide enough to read and no wider. */
+  #separations button { width: auto; min-height: 44px; padding: 0 0.9rem; font-variant-numeric: tabular-nums; }
   #paint-hint { margin: 0; opacity: 0.8; }
   #doubt { padding: 0.75rem; margin: 0; border: 1px solid #b7791f; border-radius: 0.5rem; color: #b7791f; }
 
@@ -161,6 +166,14 @@
          the white space back in one tap. -->
     <p id="trim" hidden><span id="trim-words"></span> <button id="show-blanks"></button></p>
     <p id="palette-size"></p>
+    <!-- Two shades of one colour can come back as one entry, and the count
+         above is the only place a knitter sees it happen. Every answer the
+         parse found is offered here, so a merge is one tap to fix rather than
+         something to knit around. Absent when the parse found one answer. -->
+    <div id="separation" hidden>
+      <p id="separation-hint">Not the colours you count? Read this chart as:</p>
+      <ul id="separations"></ul>
+    </div>
     <ul id="palette"></ul>
     <p id="paint-hint"></p>
     <div id="viewport">
