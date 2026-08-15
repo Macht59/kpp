@@ -26,7 +26,7 @@ from __future__ import annotations
 import io
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 from scipy import ndimage
 from scipy.cluster.hierarchy import fcluster, linkage
 from skimage.color import deltaE_ciede2000, lab2rgb, rgb2lab
@@ -112,6 +112,11 @@ def _decode(image) -> np.ndarray:
         image = io.BytesIO(image)
     if not isinstance(image, Image.Image):
         image = Image.open(image)
+    # A phone stores sensor pixels and a tag saying which way up they go; the
+    # knitter cropped on the upright picture their viewer showed them. Applied
+    # here, at the one place images enter, so nothing downstream — the crop,
+    # `source.image_width`, the stored image the client re-crops — knows the tag.
+    image = ImageOps.exif_transpose(image)
     return np.asarray(image.convert("RGB"), dtype=np.float64)
 
 

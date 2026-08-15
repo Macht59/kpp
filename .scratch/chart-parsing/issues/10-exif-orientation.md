@@ -1,7 +1,7 @@
 # 10 — A photo taken in portrait is parsed sideways
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 
 ## What goes wrong
 
@@ -46,7 +46,20 @@ Found while reviewing [web-ui ticket 08](../../web-ui/issues/08-re-parse-and-sta
 and left alone there: it is parsing-side, older than the web client, and not
 touched by that ticket.
 
-- [ ] A photo with an EXIF orientation tag is parsed in the orientation a viewer shows it in
-- [ ] The `source` block's `image_width` and `image_height` describe that same upright image, so the client's crop and the parser's agree
-- [ ] A test covers it — a corpus image re-saved with an orientation tag parses to the same Chart as the original, and no corpus image is needed to write the fixture
-- [ ] Images with no tag are unchanged, so every existing corpus result holds
+- [x] A photo with an EXIF orientation tag is parsed in the orientation a viewer shows it in
+- [x] The `source` block's `image_width` and `image_height` describe that same upright image, so the client's crop and the parser's agree
+- [x] A test covers it — a corpus image re-saved with an orientation tag parses to the same Chart as the original, and no corpus image is needed to write the fixture
+- [x] Images with no tag are unchanged, so every existing corpus result holds
+
+## Comments
+
+**Fixed in `_decode`.** `ImageOps.exif_transpose` applies the tag and drops it at
+the one place images enter, so the crop validation, the `source` block's
+`image_width`/`image_height` and everything downstream see the same upright
+pixels the knitter cropped on. Images with no tag come back unchanged — the
+whole existing suite (96 tests, corpus included) still passes.
+
+The test is in `tests/test_synthetic_chart.py`: the synthetic chart is saved as
+a PNG twice, once upright with no tag and once rotated a quarter turn with
+orientation 6 beside it, and the two parse to the same Chart. No corpus image is
+involved, so a fresh clone runs it.

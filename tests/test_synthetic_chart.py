@@ -5,8 +5,11 @@ fresh clone honest, and it is the only test that knows the true Cell colours
 rather than just the Chart's shape.
 """
 
+import io
+
 import numpy as np
 import pytest
+from PIL import Image
 from scipy import ndimage
 
 from kpp import parse_chart
@@ -148,3 +151,28 @@ def test_rejects_a_crop_too_small_to_hold_a_chart(parsed):
     image, _ = synthetic_chart()
     with pytest.raises(ValueError):
         parse_chart(image, (0, 0, 8, 8))
+
+
+def png(image, orientation=None):
+    """The synthetic chart as a file, optionally stored sideways under a tag."""
+    exif = Image.Exif()
+    if orientation:
+        image = np.rot90(image)  # as the sensor read it, holding the phone sideways
+        exif[274] = orientation
+    encoded = io.BytesIO()
+    Image.fromarray(image).save(encoded, "PNG", exif=exif)
+    return encoded.getvalue()
+
+
+def test_a_photo_stored_sideways_parses_the_way_a_viewer_shows_it():
+    """A phone stores sensor pixels and a tag saying which way up they go.
+
+    Every viewer honours the tag, so the knitter drags their crop on the upright
+    picture. A parser that ignores it holds the photo on its side and samples
+    whatever sits under the misplaced rectangle — a plausible Chart of the wrong
+    thing, with no error.
+    """
+    image, pattern = synthetic_chart()
+    rows, cols = pattern.shape
+    crop = (MARGIN, MARGIN, cols * PITCH, rows * PITCH)
+    assert parse_chart(png(image, orientation=6), crop) == parse_chart(png(image), crop)
