@@ -17,14 +17,14 @@ COLOURS = [(255, 255, 255), (20, 20, 20), (178, 96, 72)]
 GRIDLINE = 128
 
 
-def synthetic_chart(rows=6, cols=10):
+def synthetic_chart(rows=6, cols=10, colours=COLOURS):
     """Flat Cells, 1px grey gridlines, a background margin standing in for a gutter."""
-    pattern = np.array([[(r * 3 + c) % len(COLOURS) for c in range(cols)] for r in range(rows)])
+    pattern = np.array([[(r * 3 + c) % len(colours) for c in range(cols)] for r in range(rows)])
     image = np.full((rows * PITCH + 2 * MARGIN, cols * PITCH + 2 * MARGIN, 3), 255, np.uint8)
     for r in range(rows):
         for c in range(cols):
             y, x = MARGIN + r * PITCH, MARGIN + c * PITCH
-            image[y : y + PITCH, x : x + PITCH] = COLOURS[pattern[r, c]]
+            image[y : y + PITCH, x : x + PITCH] = colours[pattern[r, c]]
     for r in range(rows + 1):
         image[MARGIN + r * PITCH, MARGIN : MARGIN + cols * PITCH] = GRIDLINE
     for c in range(cols + 1):
@@ -44,6 +44,29 @@ def test_recovers_the_grid_and_palette(parsed):
     chart, pattern = parsed
     assert (chart["dimensions"]["rows"], chart["dimensions"]["cols"]) == pattern.shape
     assert len(chart["palette"]) == len(COLOURS)
+
+
+def test_a_sweep_with_one_plateau_offers_one_separation():
+    """White and black, a hundred dE apart: one defensible answer, so exactly one.
+
+    The corpus has no chart whose sweep never steps, and neither does the
+    three-colour chart above — its rust and its near-black are close enough to
+    merge inside the sweep. A knitter offered a list of one has a control that
+    does nothing, so the degenerate case is worth stating.
+    """
+    image, pattern = synthetic_chart(colours=[(255, 255, 255), (20, 20, 20)])
+    rows, cols = pattern.shape
+    chart = parse_chart(image, (MARGIN, MARGIN, cols * PITCH, rows * PITCH))
+    assert chart["separations"] == [{"colours": 2, "merge": [0, 1]}]
+    assert chart["default_separation"] == 0
+    assert len(chart["source"]["separation_thresholds"]) == 1
+
+
+def test_the_default_is_the_widest_plateau_not_the_coarsest(parsed):
+    """The three-colour chart plateaus twice; the answer that holds longest wins."""
+    chart, _ = parsed
+    assert [separation["colours"] for separation in chart["separations"]] == [2, 3]
+    assert chart["separations"][chart["default_separation"]]["colours"] == len(COLOURS)
 
 
 def test_recovers_the_actual_cell_colours(parsed):

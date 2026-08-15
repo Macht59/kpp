@@ -66,6 +66,59 @@ const MARGINED = {
   ],
 };
 
+/**
+ * A v2 Chart: four finest Palette entries and two Separations over them. At the
+ * coarse Separation the light green and the dark green are one entry — the
+ * customer's bug — and at the fine one they are two. Row 1 is the greens.
+ */
+const SEPARATED = {
+  schema_version: 2,
+  dimensions: { rows: 2, cols: 4 },
+  palette: [
+    { rgb: [255, 255, 255], name: null },
+    { rgb: [20, 20, 20], name: null },
+    { rgb: [120, 200, 120], name: null }, // light green
+    { rgb: [40, 100, 40], name: null }, // dark green
+  ],
+  cells: [
+    [1, 1, 1, 1],
+    [2, 2, 3, 3],
+  ],
+  separations: [
+    { colours: 3, merge: [0, 1, 2, 2] },
+    { colours: 4, merge: [0, 1, 2, 3] },
+  ],
+  default_separation: 0,
+};
+
+/** Nothing chosen, so the parser's default Separation — the coarse one. */
+const COARSE = { trimmed: false, overlay: {} };
+const FINE = { ...COARSE, separation: 1 };
+
+/**
+ * An off-white edge Row that is not white enough to hide on its own, and merges
+ * with the white beside it at the coarse Separation into one that is.
+ */
+const NEARLY = {
+  schema_version: 2,
+  dimensions: { rows: 3, cols: 2 },
+  palette: [
+    { rgb: [255, 255, 255], name: null }, // L* 100
+    { rgb: [235, 235, 235], name: null }, // L* 93 — not blank on its own
+    { rgb: [20, 20, 20], name: null },
+  ],
+  cells: [
+    [1, 1], // the off-white edge Row
+    [2, 2],
+    [2, 2],
+  ],
+  separations: [
+    { colours: 2, merge: [0, 0, 1] }, // the two lights as one, averaging L* 96.5
+    { colours: 3, merge: [0, 1, 2] },
+  ],
+  default_separation: 1,
+};
+
 const withCells = (chart, cells) => ({
   ...chart,
   dimensions: { rows: cells.length, cols: cells[0].length },
@@ -311,7 +364,8 @@ test("a stored Chart from an unrecognised schema is refused rather than mis-read
   // Charts on the device outlive the release that parsed them, and a later
   // schema could move Cells under the same field names.
   assert.equal(isReadable(CHART), true);
-  assert.equal(isReadable({ ...CHART, schema_version: 2 }), false);
+  assert.equal(isReadable(SEPARATED), true); // Separations were added under 2
+  assert.equal(isReadable({ ...CHART, schema_version: 3 }), false);
   assert.equal(isReadable({ ...CHART, schema_version: "1" }), false); // a string is not the version
   assert.equal(isReadable({ ...CHART, schema_version: undefined }), false);
   assert.equal(isReadable(undefined), false); // nothing under that key at all
@@ -445,6 +499,101 @@ test("a Chart that is nothing but white space is refused, not returned empty", (
   ]);
   assert.throws(() => view(empty, TRIMMED), /blank/);
   assert.deepEqual(view(empty, UNREAD).cells, empty.cells); // shown whole, it is still readable
+});
+
+test("a v2 Chart is read at the parser's default Separation until the knitter chooses", () => {
+  // Under v2 `palette` is the finest Separation, so a view that showed it raw
+  // would hand the knitter four colours where the parser's answer is three.
+  const shown = view(SEPARATED, COARSE);
+  assert.equal(shown.palette.length, 3);
+  assert.deepEqual(shown.cells, [
+    [1, 1, 1, 1],
+    [2, 2, 2, 2],
+  ]);
+});
+
+test("the two greens are one Run at the coarse Separation and two at the fine one", () => {
+  // the customer's bug, expressed as a test: "7 green" where the pattern says 4 and 3
+  assert.deepEqual(counted(runsOfRow(view(SEPARATED, COARSE), 1, LEFT_TO_RIGHT)), [
+    { entry: 2, count: 4 },
+  ]);
+  const fine = view(SEPARATED, FINE);
+  assert.equal(fine.palette.length, 4);
+  assert.deepEqual(counted(runsOfRow(fine, 1, LEFT_TO_RIGHT)), [
+    { entry: 2, count: 2 },
+    { entry: 3, count: 2 },
+  ]);
+});
+
+test("a Separation's colours are averaged from the finest entries it merges", () => {
+  // derived, never stored: a colour list per Separation would be a second source
+  // of truth for the same colours
+  assert.deepEqual(view(SEPARATED, COARSE).palette[2].rgb, [80, 150, 80]);
+  assert.deepEqual(view(SEPARATED, FINE).palette[2].rgb, [120, 200, 120]);
+});
+
+test("a merged colour leans towards the entry more Cells are knitted in", () => {
+  // A parsed entry is the average of the Cells that landed in it, so a merged
+  // one has to be too: averaging the finest entries evenly instead drags every
+  // colour towards the near-duplicates around it, and the default Separation
+  // stops being the Chart the parser returned.
+  const mostly = { ...SEPARATED, dimensions: { rows: 1, cols: 4 }, cells: [[2, 2, 2, 3]] };
+  assert.deepEqual(view(mostly, COARSE).palette[2].rgb, [100, 175, 100]);
+});
+
+test("a Chart parsed before Separations existed is read as the single one it has", () => {
+  // v1 is exactly v2 with one Separation, so it lifts rather than being refused
+  const shown = view(CHART, UNREAD);
+  assert.deepEqual(shown.palette, CHART.palette); // Colorway names and all
+  assert.deepEqual(shown.cells, CHART.cells);
+  assert.equal(entryLabel(shown, 2), "Rust");
+});
+
+test("a Repaint made at one Separation is still there after switching, both ways", () => {
+  // Stored at the finest Separation, because an index into a Palette that is
+  // about to change cannot outlive the change.
+  const green = repaint(SEPARATED, COARSE, { row: 2, from: 0, to: 0 }, 2);
+  assert.deepEqual(green.overlay, { "0,0": 2 });
+  assert.deepEqual(cellsOfRow(view(SEPARATED, green), 2), [2, 1, 1, 1]);
+  assert.deepEqual(cellsOfRow(view(SEPARATED, { ...green, separation: 1 }), 2), [2, 1, 1, 1]);
+  // and the other direction: a dark green chosen at the fine Separation reads as
+  // the one green at the coarse one
+  const dark = repaint(SEPARATED, FINE, { row: 2, from: 3, to: 3 }, 3);
+  assert.deepEqual(dark.overlay, { "0,3": 3 });
+  assert.deepEqual(cellsOfRow(view(SEPARATED, { ...dark, separation: 0 }), 2), [1, 1, 1, 2]);
+});
+
+test("a Repaint at a coarse Separation records the colour the swatch mostly was", () => {
+  // The swatch is the merged entries averaged by Cell count, so the most-used of
+  // them is what the knitter was looking at — recording the first instead would
+  // hand them a near-duplicate they never picked the moment they switch finer.
+  const mostly = { ...SEPARATED, dimensions: { rows: 1, cols: 4 }, cells: [[2, 3, 3, 3]] };
+  const painted = repaint(mostly, COARSE, { row: 1, from: 0, to: 0 }, 2);
+  assert.deepEqual(painted.overlay, { "0,0": 3 }); // the dark green, three Cells of four
+  assert.deepEqual(cellsOfRow(view(mostly, { ...painted, separation: 1 }), 1), [3, 3, 3, 3]);
+});
+
+test("a Repaint to Non-stitch survives a Separation switch equally", () => {
+  // "not yarn" is a statement no colour decision can undo
+  const carved = repaint(SEPARATED, COARSE, { row: 1, from: 0, to: 1 }, -1);
+  assert.deepEqual(cellsOfRow(view(SEPARATED, { ...carved, separation: 1 }), 1), [-1, -1, 3, 3]);
+});
+
+test("a Palette entry the Separation being read does not have is refused", () => {
+  // the fine Separation's fourth entry is no entry of the coarse one
+  assert.throws(
+    () => repaint(SEPARATED, COARSE, { row: 1, from: 0, to: 0 }, 3),
+    /Palette entry 3/,
+  );
+  assert.deepEqual(repaint(SEPARATED, FINE, { row: 1, from: 0, to: 0 }, 3).overlay, { "1,0": 3 });
+});
+
+test("Blank edges are recomputed against the Separation being read", () => {
+  // a hidden Row must never be a Row the knitter can see has colour in it
+  const trimmed = (separation) => view(NEARLY, { ...COARSE, trimmed: true, separation });
+  assert.deepEqual(trimmed(1).blank, { top: 0, bottom: 0, left: 0, right: 0 });
+  assert.deepEqual(trimmed(0).blank, { top: 1, bottom: 0, left: 0, right: 0 });
+  assert.equal(rowCount(trimmed(0)), 2);
 });
 
 test("only a crop near the coin flip is doubtful, and a Chart without the signal never is", () => {

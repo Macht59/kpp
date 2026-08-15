@@ -1,8 +1,13 @@
 """The chart parsing service: `parse_chart(image, crop) -> Chart`.
 
 One high seam. A cropped chart screenshot plus the rectangle the knitter drew
-go in; a Chart dict matching the schema-1 contract comes out, ready to
+go in; a Chart dict matching the schema-2 contract comes out, ready to
 `json.dumps`. The service is stateless and retains nothing.
+
+A parse answers the colour-count question several times over: `palette` is the
+*finest* Separation and `separations` maps it onto each coarser answer the
+threshold sweep defends, so the knitter switches on the device instead of
+parsing again. `default_separation` is the answer this returned under schema 1.
 
 Pipeline: decode -> deskew -> lattice recovery -> crop-snap -> Cell sampling ->
 Palette recovery -> serialise. The lattice is *extrapolated* from a recovered
@@ -26,7 +31,10 @@ from scipy import ndimage
 from scipy.cluster.hierarchy import fcluster, linkage
 from skimage.color import deltaE_ciede2000, lab2rgb, rgb2lab
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+
+SWEEP = np.arange(1.0, 41.0, 0.5)  # dE cutoffs the Palette merge is chosen from
+MAX_SEPARATIONS = 8  # answers offered, taken from the widest plateaus of that sweep
 
 MIN_PITCH, MAX_PITCH = 6.0, 120.0  # px between gridlines we are willing to believe
 SNAP_TOLERANCE = 0.5  # Cells; the worst an edge can miss its gridline by, once snapped
@@ -47,7 +55,7 @@ def parse_chart(image, crop) -> dict:
     `image` is a path, bytes, file-like, PIL image or RGB array; `crop` is the
     knitter's rectangle `(x, y, w, h)` in source pixels, gutters excluded.
 
-    Returns the schema-1 Chart dict. Structural doubt (was the crop good?) is
+    Returns the schema-2 Chart dict. Structural doubt (was the crop good?) is
     `confidence.chart`; per-Cell doubt is the sparse `confidence.cells` list.
     The two are never averaged — a bad crop is redone, a doubtful Cell is tapped.
     """
@@ -61,14 +69,18 @@ def parse_chart(image, crop) -> dict:
 
     lattice = _recover_lattice(sub)
     medians, spread = _sample_cells(sub, lattice)
-    palette, cells, margin = _recover_palette(medians)
+    recovered = _recover_palette(medians)
+    cells = recovered["cells"]
 
     return {
         "schema_version": SCHEMA_VERSION,
         "dimensions": {"rows": cells.shape[0], "cols": cells.shape[1]},
-        "palette": [{"rgb": [int(c) for c in entry], "name": None} for entry in palette],
+        "palette": [{"rgb": [int(c) for c in entry], "name": None} for entry in recovered["rgb"]],
         "cells": cells.tolist(),
+        "separations": recovered["separations"],
+        "default_separation": recovered["default"],
         "source": {
+            "separation_thresholds": recovered["thresholds"],
             "image_width": rgb.shape[1],
             "image_height": rgb.shape[0],
             "crop": [x, y, w, h],
@@ -81,7 +93,7 @@ def parse_chart(image, crop) -> dict:
         },
         "confidence": {
             "chart": _chart_confidence(lattice),
-            "cells": _flagged_cells(spread, margin),
+            "cells": _flagged_cells(spread, recovered["margin"]),
         },
     }
 
@@ -306,14 +318,26 @@ def _sample_cells(sub: np.ndarray, lattice: dict) -> tuple[np.ndarray, np.ndarra
 # ---------- palette ----------
 
 
-def _recover_palette(medians: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Cluster the sampled Cell colours into a Palette; return (rgb, cells, margin).
+def _recover_palette(medians: np.ndarray) -> dict:
+    """Cluster the sampled Cell colours into every Separation the sweep defends.
 
     Sample first, cluster second — harvesting flat pixels before sampling finds
-    nothing on a noisy chart. The merge threshold is *swept* and the count at the
-    widest plateau wins; a fixed dE 3.0 over-segments a noisy chart by 13x. No
-    blend-rejection pass: the plateau already merges gridline blends, and testing
-    Lab-collinearity on top removes rare-but-real yarns.
+    nothing on a noisy chart. The merge threshold is *swept*, and each plateau of
+    the count is one defensible answer; a fixed dE 3.0 over-segments a noisy
+    chart by 13x. No blend-rejection pass: the plateau already merges gridline
+    blends, and testing Lab-collinearity on top removes rare-but-real yarns.
+
+    `rgb` and `cells` are cut at the *finest* answer offered, and every other
+    Separation ships as a `merge` over it — the clustering is hierarchical, so a
+    coarser answer is a strict grouping of a finer one and costs a short mapping
+    rather than a second grid. `margin` is measured at the default Separation,
+    which is the one Review's flags are for.
+
+    A Cell takes the entry of the cluster it was put in, rather than of the
+    nearest centroid it happens to sit by — only the first is what the merge maps
+    group, and a Cell whose two answers disagree would otherwise move between
+    entries as the knitter switches Separation. The two disagreed on 33 Cells in
+    16800 on the corpus's hardest chart.
     """
     ny, nx, _ = medians.shape
     unique, inverse = np.unique(
@@ -321,42 +345,93 @@ def _recover_palette(medians: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.nd
     )
     labs = rgb2lab((unique / 255.0)[None, :, :])[0]
     if len(unique) == 1:
-        return unique, np.zeros((ny, nx), dtype=int), np.full(ny * nx, MARGIN_CEILING)
+        return {
+            "rgb": unique,
+            "cells": np.zeros((ny, nx), dtype=int),
+            "margin": np.full(ny * nx, MARGIN_CEILING),
+            "separations": [{"colours": 1, "merge": [0]}],
+            "default": 0,
+            "thresholds": [float(SWEEP[-1])],
+        }
 
     rows, cols = np.triu_indices(len(unique), 1)
     tree = linkage(deltaE_ciede2000(labs[rows], labs[cols]), method="complete")
-    clusters = fcluster(tree, t=_plateau_threshold(tree), criterion="distance")[inverse]
+    thresholds, default = _plateau_thresholds(tree)
+    cuts = [fcluster(tree, t=t, criterion="distance") for t in thresholds]
 
     cell_labs = labs[inverse]
-    centroids = np.array(
+    clusters = cuts[-1][inverse]
+    centroids = _centroids(cell_labs, clusters)
+    return {
+        "rgb": np.clip(lab2rgb(centroids[None, :, :])[0] * 255.0, 0, 255).round().astype(int),
+        "cells": clusters.reshape(ny, nx) - 1,
+        "margin": _margins(cell_labs, cuts[default][inverse]),
+        "separations": [
+            {"colours": int(cut.max()), "merge": _merge_map(cuts[-1], cut)} for cut in cuts
+        ],
+        "default": default,
+        "thresholds": thresholds,
+    }
+
+
+def _plateau_thresholds(tree: np.ndarray) -> tuple[list[float], int]:
+    """The merge thresholds worth offering, coarse to fine, and which is the default.
+
+    A plateau is a Palette size that survives a wide range of thresholds — the
+    real colours. Over-segmented noise and under-merged blends both live on
+    narrow steps. Width is the only evidence that an answer is real, so the
+    widest few are kept; the widest of all is the default, which is the one
+    answer this returned before Separations existed.
+
+    `ponytail:` nothing bounds the finest answer's size, and `palette`, `cells`
+    and every `merge` are cut at it — on the corpus's worst chart that is 36
+    entries against a default of 7, and an image noisy enough for every run to
+    be one step wide would offer the eight finest cutoffs of the sweep and a
+    Palette to match. Bound it by dropping runs far finer than the default if a
+    parse ever comes back with a Palette no knitter could read.
+    """
+    counts = np.array([fcluster(tree, t=t, criterion="distance").max() for t in SWEEP])
+    edges = np.flatnonzero(np.diff(counts)) + 1
+    runs = list(zip([0, *edges], [*edges, len(counts)]))
+    widest = sorted(runs, key=lambda r: r[0] - r[1])[:MAX_SEPARATIONS]
+    coarse_to_fine = sorted(widest, reverse=True)  # a high cutoff merges the most
+    return (
+        [float(SWEEP[(start + stop) // 2]) for start, stop in coarse_to_fine],
+        coarse_to_fine.index(widest[0]),
+    )
+
+
+def _merge_map(finest: np.ndarray, coarser: np.ndarray) -> list[int]:
+    """Which entry of a coarser Separation each finest Palette entry falls into.
+
+    Hierarchical clustering never re-shuffles, so every finest entry lands whole
+    in exactly one coarser entry. Relabelled 0..colours-1 in the order they first
+    appear, because a gap in the map would be a Palette with a hole in it.
+    """
+    entries: dict[int, int] = {}
+    return [
+        entries.setdefault(int(coarser[finest == k][0]), len(entries))
+        for k in range(1, finest.max() + 1)
+    ]
+
+
+def _centroids(cell_labs: np.ndarray, clusters: np.ndarray) -> np.ndarray:
+    """A Palette entry per cluster, averaged over the Cells that landed in it."""
+    return np.array(
         [cell_labs[clusters == k].mean(axis=0) for k in range(1, clusters.max() + 1)]
     )
+
+
+def _margins(cell_labs: np.ndarray, clusters: np.ndarray) -> np.ndarray:
+    """How far each Cell sits from its Palette entry towards the next nearest one."""
+    centroids = _centroids(cell_labs, clusters)
+    if len(centroids) == 1:
+        return np.full(len(cell_labs), MARGIN_CEILING)
     distances = np.stack(
         [deltaE_ciede2000(cell_labs, np.tile(c, (len(cell_labs), 1))) for c in centroids], axis=1
     )
     nearest = np.sort(distances, axis=1)
-    margin = (
-        nearest[:, 1] - nearest[:, 0]
-        if distances.shape[1] > 1
-        else np.full(len(nearest), MARGIN_CEILING)
-    )
-    palette = np.clip(lab2rgb(centroids[None, :, :])[0] * 255.0, 0, 255).round().astype(int)
-    return palette, distances.argmin(axis=1).reshape(ny, nx), margin
-
-
-def _plateau_threshold(tree: np.ndarray) -> float:
-    """The merge threshold at the widest plateau of the cluster-count sweep.
-
-    A plateau is a Palette size that survives a wide range of thresholds — the
-    real colours. Over-segmented noise and under-merged blends both live on
-    narrow steps.
-    """
-    thresholds = np.arange(1.0, 41.0, 0.5)
-    counts = np.array([fcluster(tree, t=t, criterion="distance").max() for t in thresholds])
-    edges = np.flatnonzero(np.diff(counts)) + 1
-    runs = list(zip([0, *edges], [*edges, len(counts)]))
-    start, stop = max(runs, key=lambda r: r[1] - r[0])
-    return float(thresholds[(start + stop) // 2])
+    return nearest[:, 1] - nearest[:, 0]
 
 
 # ---------- confidence ----------

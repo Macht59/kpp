@@ -60,9 +60,57 @@ def test_dimensions_match_ground_truth(chart, name):
 UNDER_SEGMENTED = {"112w150h-9colors.png": 7}
 
 
-def test_palette_size_matches_ground_truth(chart, name):
+def test_default_separation_matches_ground_truth(chart, name):
+    """The answer the parser picks on its own — the widest plateau of the sweep."""
     _, _, colors = ground_truth(name)
-    assert len(chart["palette"]) == UNDER_SEGMENTED.get(name, colors)
+    default = chart["separations"][chart["default_separation"]]
+    assert default["colours"] == UNDER_SEGMENTED.get(name, colors)
+
+
+# ponytail: the same two rare yarns, one rung further out. No plateau of the
+# 9-colour chart's sweep counts nine at all — 8 and 12 bracket it — so switching
+# Separation cannot recover them either. Recorded rather than asserted away: the
+# widest-eight rule is what keeps the list short and every entry in it real, and
+# finding a yarn of 18 Cells in 16800 is the rarity-weighted Palette recovery of
+# chart-parsing 05, not this ticket.
+NOT_OFFERED = {"112w150h-9colors.png": 8}
+
+
+def test_the_ground_truth_count_is_among_the_answers_offered(chart, name):
+    _, _, colors = ground_truth(name)
+    offered = [separation["colours"] for separation in chart["separations"]]
+    assert NOT_OFFERED.get(name, colors) in offered
+
+
+def test_offers_a_separation_per_plateau_coarse_to_fine(chart, name):
+    separations = chart["separations"]
+    assert 1 <= len(separations) <= 8
+    counts = [separation["colours"] for separation in separations]
+    assert counts == sorted(counts)  # coarse to fine, which is not how they were chosen
+    assert len(set(counts)) == len(counts)  # one answer per plateau
+    assert 0 <= chart["default_separation"] < len(separations)
+
+
+def test_every_merge_covers_the_finest_palette_and_leaves_no_hole(chart, name):
+    for separation in chart["separations"]:
+        merge = separation["merge"]
+        assert len(merge) == len(chart["palette"])
+        assert set(merge) == set(range(separation["colours"]))
+
+
+def test_the_finest_separation_is_the_palette_itself(chart, name):
+    """`palette` and `cells` are cut at the finest offered answer, so it merges nothing."""
+    finest = chart["separations"][-1]
+    assert finest["colours"] == len(chart["palette"])
+    assert finest["merge"] == list(range(len(chart["palette"])))
+
+
+def test_separations_nest_rather_than_reshuffle(chart, name):
+    """Two finest entries merged at one Separation are never split apart at a coarser one."""
+    for finer, coarser in zip(chart["separations"][1:], chart["separations"]):
+        grouped = {}
+        for fine, coarse in zip(finer["merge"], coarser["merge"]):
+            assert grouped.setdefault(fine, coarse) == coarse
 
 
 def test_dimensions_match_cells_shape(chart, name):
@@ -85,12 +133,16 @@ def test_palette_entries_are_rgb_with_null_name(chart, name):
 
 
 def test_schema_version_and_source_block(chart, name):
-    assert chart["schema_version"] == 1
+    assert chart["schema_version"] == 2
     source = chart["source"]
     assert set(source) == {"image_width", "image_height", "crop", "pitch",
-                           "origin", "skew_deg"}
+                           "origin", "skew_deg", "separation_thresholds"}
     assert source["crop"] == CROPS[name]
     assert all(p > 0 for p in source["pitch"])
+    # one cutoff per answer, and coarse to fine means the cutoffs come down
+    thresholds = source["separation_thresholds"]
+    assert len(thresholds) == len(chart["separations"])
+    assert thresholds == sorted(thresholds, reverse=True)
 
 
 def test_chart_is_json_serialisable(chart, name):

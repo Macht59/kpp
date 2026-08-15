@@ -1,4 +1,4 @@
-// Chart logic: pure functions over the schema-1 Chart contract.
+// Chart logic: pure functions over the Chart contract, schema 1 and 2.
 // No DOM, no canvas, no storage — this is the module under test.
 
 const NON_STITCH = -1;
@@ -30,9 +30,12 @@ export function readingDirection({ construction, start, flips }, row) {
  * could move Cells under the same field names, and a mis-read Chart is a
  * knitter following counts that are not their pattern's.
  */
-export const SCHEMA_VERSION = 1;
+// Both are readable, because a v1 Chart is exactly a v2 Chart with one
+// Separation. Refusing one would tell a knitter their existing library was
+// "saved by a newer version of this app", which is both wrong and expensive.
+export const SCHEMA_VERSIONS = [1, 2];
 
-export const isReadable = (chart) => chart?.schema_version === SCHEMA_VERSION;
+export const isReadable = (chart) => SCHEMA_VERSIONS.includes(chart?.schema_version);
 
 // `confidence.chart` is 1.0 when the crop's edges landed on gridlines and 0.0
 // when one sat exactly between two — a coin flip that may have cost a Cell. The
@@ -155,15 +158,96 @@ function blankEdges({ cells, palette }) {
 }
 
 // Measured from the parse rather than from the Repaints over it, and so fixed
-// for a Chart: a knitter tidying a speck off an otherwise white edge Column
-// must not have that Column disappear and every Column number shift under
-// them. Kept, because a paint drag derives the view on every pointer move and
-// the scan walks the whole Chart.
+// for a Chart at a given Separation: a knitter tidying a speck off an otherwise
+// white edge Column must not have that Column disappear and every Column number
+// shift under them. Kept, because a paint drag derives the view on every pointer
+// move and the scan walks the whole Chart.
 const edgesOfChart = new WeakMap();
 
-function blankEdgesOf(chart) {
-  if (!edgesOfChart.has(chart.cells)) edgesOfChart.set(chart.cells, blankEdges(chart));
-  return edgesOfChart.get(chart.cells);
+function blankEdgesOf(chart, { index, palette, read }) {
+  const cached = edgesOfChart.get(chart.cells) ?? new Map();
+  edgesOfChart.set(chart.cells, cached);
+  // Recomputed per Separation, so a hidden line is never a line the knitter can
+  // see has colour in it: white and off-white may be one entry at a coarse
+  // Separation and two at a fine one.
+  if (!cached.has(index))
+    cached.set(index, blankEdges({ cells: chart.cells.map((row) => row.map(read)), palette }));
+  return cached.get(index);
+}
+
+/**
+ * The Separations a Chart offers, coarse to fine. A Chart parsed before
+ * Separations existed offers exactly one — its own Palette, merged with
+ * nothing — so v1 is read here as the v2 Chart it always was.
+ */
+const separationsOf = (chart) =>
+  chart.separations ?? [
+    { colours: chart.palette.length, merge: chart.palette.map((_, entry) => entry) },
+  ];
+
+/**
+ * The Separation being read: the knitter's choice, or the parser's default when
+ * they have made none. A choice that no longer indexes a Separation — a Chart
+ * re-parsed under it — falls back to the default rather than refusing to draw.
+ */
+function separationOf(chart, chosen) {
+  const separations = separationsOf(chart);
+  // One index for both the Separation and the Blank-edge cache, so a default
+  // that indexes nothing either cannot key edges belonging to another answer.
+  const index = [chosen, chart.default_separation, 0].find((at) => separations[at]);
+  return { index, ...separations[index] };
+}
+
+/**
+ * The Palette of one Separation: each entry the average of the finest entries it
+ * merges, weighted by how many Cells each of those holds. Derived rather than
+ * stored, because a colour list per Separation would be a second source of truth
+ * for the same colours. An entry that merges nothing comes through as it is,
+ * Colorway name and all.
+ *
+ * The weighting is what makes the default Separation the Chart the parser used
+ * to return: each parsed entry is the average of the Cells that landed in it, so
+ * a coarse entry has to be too. Averaging its finest entries evenly instead
+ * drags every colour towards the near-duplicates around it — on the corpus, a
+ * white of 252 came out at 236 and a mid grey at 210.
+ * `ponytail:` averaged in RGB where the parser averages in Lab. Worth 5 levels
+ * of one channel at most across the corpus, on one orange, so the conversion is
+ * not worth carrying here — do it if a merged colour ever reads visibly wrong.
+ */
+function paletteOf(chart, merge, counts) {
+  const groups = [];
+  merge.forEach((to, from) => (groups[to] ??= []).push(from));
+  return groups.map((group) => {
+    if (group.length === 1) return chart.palette[group[0]];
+    // An entry no Cell uses still counts once, so a group of them averages
+    // rather than dividing by nothing.
+    const weights = group.map((entry) => counts[entry] || 1);
+    const total = weights.reduce((sum, weight) => sum + weight, 0);
+    return {
+      rgb: [0, 1, 2].map((channel) =>
+        Math.round(
+          group.reduce((sum, entry, at) => sum + chart.palette[entry].rgb[channel] * weights[at], 0) /
+            total,
+        ),
+      ),
+      name: null,
+    };
+  });
+}
+
+// The Cells of the parse behind each finest Palette entry — the weights the
+// derived colours are averaged with. Of the parse and not of the Repaints over
+// it, for the same reason the Blank edges are, and kept for the same one: a
+// paint drag derives the view on every pointer move.
+const countsOfChart = new WeakMap();
+
+function countsOf(chart) {
+  if (!countsOfChart.has(chart.cells)) {
+    const counts = chart.palette.map(() => 0);
+    for (const row of chart.cells) for (const cell of row) if (cell !== NON_STITCH) counts[cell] += 1;
+    countsOfChart.set(chart.cells, counts);
+  }
+  return countsOfChart.get(chart.cells);
 }
 
 /**
@@ -173,17 +257,26 @@ function blankEdgesOf(chart) {
  * exactly the shape every function above consumes, so they operate on the view
  * and never learn that a view exists.
  *
- * `separation` is inert here — Separations land in their own ticket. `overlay`
- * is the Repaints, keyed by array Row and Column of the stored Chart, so it
- * holds still when the Chart is read differently. `trimmed` hides the Blank
- * edges — the state a Chart is opened with, see `keptView`: nothing is deleted,
- * the Cells are simply not part of the Chart being read, and `blank` comes back
- * either way so the knitter can be told what is being kept from them.
+ * `separation` is which of the Chart's Separations to read it at — under v2
+ * `palette` is the *finest* one, a base for the merge maps rather than something
+ * to show a knitter, so the view's Palette is always a Separation's. `overlay`
+ * is the Repaints, keyed by array Row and Column of the stored Chart and holding
+ * finest-Palette entries, so they hold still when the Chart is read differently.
+ * `trimmed` hides the Blank edges — the state a Chart is opened with, see
+ * `keptView`: nothing is deleted, the Cells are simply not part of the Chart
+ * being read, and `blank` comes back either way so the knitter can be told what
+ * is being kept from them.
  */
-export function view(chart, { trimmed = false, overlay = {} } = {}) {
-  const painted = chart.cells.map((cells, r) => cells.map((cell, c) => overlay[`${r},${c}`] ?? cell));
-  const blank = blankEdgesOf(chart);
-  if (!trimmed) return { ...chart, cells: painted, blank, trimmed };
+export function view(chart, { separation, trimmed = false, overlay = {} } = {}) {
+  const { index, merge } = separationOf(chart, separation);
+  const palette = paletteOf(chart, merge, countsOf(chart));
+  const read = (cell) => (cell === NON_STITCH ? NON_STITCH : merge[cell]);
+  const painted = chart.cells.map((cells, r) =>
+    cells.map((cell, c) => read(overlay[`${r},${c}`] ?? cell)),
+  );
+  const blank = blankEdgesOf(chart, { index, palette, read });
+  const shown = { ...chart, palette, blank, trimmed };
+  if (!trimmed) return { ...shown, cells: painted };
   const cells = painted
     .slice(blank.top, painted.length - blank.bottom)
     .map((row) => row.slice(blank.left, row.length - blank.right));
@@ -191,7 +284,7 @@ export function view(chart, { trimmed = false, overlay = {} } = {}) {
   // way out, because an empty Chart on screen tells the knitter nothing.
   if (!cells.length || !cells[0].length)
     throw new Error("This chart is blank — crop closer to the pattern and parse it again.");
-  return { ...chart, cells, blank, trimmed };
+  return { ...shown, cells };
 }
 
 /** Where a view's Cell sits in the stored Chart: past the Blank edges it hides. */
@@ -222,10 +315,22 @@ export function repaint(chart, state, { row, from, to }, entry) {
   const [first, last] = from <= to ? [from, to] : [to, from];
   if (!Number.isInteger(first) || !Number.isInteger(last) || first < 0 || last >= colCount(shown))
     throw new Error(`cells ${first}–${last} are outside this Chart`);
-  // Whole numbers here too: `null >= 0` is true, and a null in the overlay is a
-  // Cell with no colour that only shows up when something tries to draw it.
-  const known = Number.isInteger(entry) && entry >= 0 && entry < chart.palette.length;
-  if (entry !== NON_STITCH && !known)
+  // The knitter points at a colour of the Chart they can see, which is one
+  // Separation's entry; the Repaint is recorded at the finest Separation, so it
+  // survives a switch in either direction. Of the finest entries that entry
+  // merges, the one holding the most Cells: the swatch they tapped is those
+  // entries averaged by Cell count, so the most-used is the colour it mostly
+  // was, and switching to a finer Separation shows them that rather than
+  // whichever near-duplicate happened to be first. The search also does the
+  // guarding — `null >= 0` is true and 1.5 indexes nothing, and a null in the
+  // overlay is a Cell with no colour that only shows up when something draws it.
+  const { merge } = separationOf(chart, state.separation);
+  const counts = countsOf(chart);
+  const finest = merge.reduce(
+    (best, to, from) => (to === entry && (best < 0 || counts[from] > counts[best]) ? from : best),
+    -1,
+  );
+  if (entry !== NON_STITCH && finest < 0)
     throw new Error(`no Palette entry ${entry} in this Chart`);
 
   // Back through the Blank edges the view hides, so a Repaint is stored against
@@ -233,6 +338,7 @@ export function repaint(chart, state, { row, from, to }, entry) {
   const { top, left } = offset(shown);
   const index = rowIndex(shown, row) + top;
   const overlay = { ...state.overlay };
-  for (let col = first; col <= last; col += 1) overlay[`${index},${col + left}`] = entry;
+  const stored = entry === NON_STITCH ? NON_STITCH : finest;
+  for (let col = first; col <= last; col += 1) overlay[`${index},${col + left}`] = stored;
   return { ...state, overlay };
 }

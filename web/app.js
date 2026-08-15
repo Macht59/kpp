@@ -232,7 +232,9 @@ async function parse(image, { x, y, w, h }) {
  * does.
  */
 function keptView({ separation, trimmed, overlay }) {
-  return { separation: separation ?? 0, trimmed: trimmed ?? true, overlay: overlay ?? {} };
+  // No Separation of their own means the parser's default, which `view` knows
+  // and a stored record does not — a v1 Chart has no default to record.
+  return { separation, trimmed: trimmed ?? true, overlay: overlay ?? {} };
 }
 
 /** A freshly parsed Chart is unverified, so it opens in Review, at its bottom Row. */

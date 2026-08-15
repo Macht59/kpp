@@ -99,7 +99,7 @@ else — no bundler, no dependency the browser ever sees.
 
 `POST /api/parse` takes
 the image as a multipart upload plus the crop as `x, y, w, h`, and returns the
-schema-1 Chart. A parser `ValueError` comes back as a 400 carrying the parser's
+schema-2 Chart. A parser `ValueError` comes back as a 400 carrying the parser's
 own message, because every one of them is something the knitter can act on; an
 upload over 20 MB is refused with a 413 rather than truncated and parsed into a
 plausible, wrong Chart.
