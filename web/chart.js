@@ -136,7 +136,7 @@ const BLANK_ABOVE = 95;
  * cutting white Rows away can leave a Column white along its whole remaining
  * length, and that Column is white space too.
  */
-function blankEdges(cells, palette) {
+function blankEdges({ cells, palette }) {
   // Non-stitch indexes no entry, so it is never blank — it is the knitter
   // saying "not yarn here", which is a statement about the pattern.
   const blank = palette.map((entry) => lightness(entry.rgb) >= BLANK_ABOVE);
@@ -154,6 +154,18 @@ function blankEdges(cells, palette) {
   return { top, bottom: cells.length - bottom, left, right: cells[0].length - right };
 }
 
+// Measured from the parse rather than from the Repaints over it, and so fixed
+// for a Chart: a knitter tidying a speck off an otherwise white edge Column
+// must not have that Column disappear and every Column number shift under
+// them. Kept, because a paint drag derives the view on every pointer move and
+// the scan walks the whole Chart.
+const edgesOfChart = new WeakMap();
+
+function blankEdgesOf(chart) {
+  if (!edgesOfChart.has(chart.cells)) edgesOfChart.set(chart.cells, blankEdges(chart));
+  return edgesOfChart.get(chart.cells);
+}
+
 /**
  * The Chart the knitter is reading, derived from the stored one and the
  * decisions they have made about it: which Separation to read it at, whether
@@ -164,13 +176,13 @@ function blankEdges(cells, palette) {
  * `separation` is inert here — Separations land in their own ticket. `overlay`
  * is the Repaints, keyed by array Row and Column of the stored Chart, so it
  * holds still when the Chart is read differently. `trimmed` hides the Blank
- * edges, which is the default: nothing is deleted, the Cells are simply not
- * part of the Chart being read, and `blank` comes back either way so the
- * knitter can be told what is being kept from them.
+ * edges — the state a Chart is opened with, see `keptView`: nothing is deleted,
+ * the Cells are simply not part of the Chart being read, and `blank` comes back
+ * either way so the knitter can be told what is being kept from them.
  */
 export function view(chart, { trimmed = false, overlay = {} } = {}) {
   const painted = chart.cells.map((cells, r) => cells.map((cell, c) => overlay[`${r},${c}`] ?? cell));
-  const blank = blankEdges(painted, chart.palette);
+  const blank = blankEdgesOf(chart);
   if (!trimmed) return { ...chart, cells: painted, blank, trimmed };
   const cells = painted
     .slice(blank.top, painted.length - blank.bottom)

@@ -421,6 +421,23 @@ test("Repaint's guards run against the Chart the knitter can see, not the parsed
   assert.deepEqual(paint({ row: 2, from: 2, to: 2 }).overlay, { "1,3": 1 });
 });
 
+test("a Repaint never changes which lines are hidden", () => {
+  // Tidying a speck off an otherwise white edge Column must not make that
+  // Column vanish and shift every Column number under the knitter.
+  const specked = withCells(MARGINED, [
+    [0, 0, 0],
+    [1, 1, 1],
+    [0, 0, 1],
+  ]);
+  const cleaned = repaint(specked, TRIMMED, { row: 1, from: 2, to: 2 }, 0);
+  const shown = view(specked, cleaned);
+  assert.deepEqual(shown.blank, view(specked, TRIMMED).blank);
+  assert.deepEqual(shown.cells, [
+    [1, 1, 1],
+    [0, 0, 0],
+  ]);
+});
+
 test("a Chart that is nothing but white space is refused, not returned empty", () => {
   const empty = withCells(MARGINED, [
     [0, 0],

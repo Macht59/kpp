@@ -424,10 +424,12 @@ async function openChart(id) {
   try {
     redraw();
   } catch (failure) {
-    // A Chart kept before Blank edges were hidden can turn out to be nothing but
-    // white space. Refused with the way out, rather than opened empty.
-    setMode(null);
-    return say(error, failure.message);
+    // A Chart that is nothing but white space is opened whole, with the reason
+    // said: the way to a tighter crop is Re-parse, which is in Review, so a
+    // screen cleared of everything would clear the way out with it.
+    chosenView = { ...chosenView, trimmed: false };
+    say(error, failure.message);
+    redraw();
   }
   frameTheImage();
   showImage(false);
@@ -514,7 +516,18 @@ const blanks = (count, line) => count && `${count} blank ${line}${count === 1 ? 
 // Hiding is a default and not a rule: the knitter whose pattern has a white edge
 // Row shows it again here, and that decision is kept with the Chart.
 showBlanks.addEventListener("click", () => {
-  chosenView = { ...chosenView, trimmed: !chosenView.trimmed };
+  const wanted = { ...chosenView, trimmed: !chosenView.trimmed };
+  try {
+    view(chart, wanted); // a Chart that is all white space cannot be shown trimmed
+  } catch (failure) {
+    return say(error, failure.message);
+  }
+  // Row 1 is the bottom of the Chart, so hiding the Blank edges under it
+  // renumbers every Row above: the knitter stays on the Row they were on.
+  const shift = shown.blank.bottom * (wanted.trimmed ? -1 : 1);
+  selected = Math.max(selected + shift, 1);
+  chosenView = wanted;
+  say(error, null);
   redraw(); // before the frame: the window is cut to the size of the Chart being read
   frameTheImage();
   drawFacts();
