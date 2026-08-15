@@ -1,0 +1,126 @@
+// node --test "web/*.test.js"
+import { test } from "node:test";
+import assert from "node:assert/strict";
+
+import { view } from "./chart.js";
+import {
+  KNIT,
+  REVIEW,
+  blankWords,
+  measured,
+  paletteWords,
+  rowAfterAdopting,
+  screenFor,
+  separationChoices,
+} from "./screen.js";
+
+/** Two Separations over one Chart: white and off-white are one colour, then two. */
+const CHART = {
+  schema_version: 2,
+  dimensions: { rows: 3, cols: 4 },
+  palette: [
+    { rgb: [255, 255, 255], name: null }, // L* 100
+    { rgb: [245, 245, 245], name: null }, // L* 96.5 — inside the blank gate
+    { rgb: [20, 20, 20], name: null },
+  ],
+  cells: [
+    [0, 0, 0, 0],
+    [1, 2, 2, 1],
+    [0, 2, 2, 0],
+  ],
+  separations: [
+    { colours: 2, merge: [0, 0, 1] },
+    { colours: 3, merge: [0, 1, 2] },
+  ],
+  default_separation: 0,
+};
+
+/** A Chart from before Separations existed: one answer, so nothing to choose. */
+const V1 = { ...CHART, schema_version: 1, separations: undefined, default_separation: undefined };
+
+const READ = { separation: undefined, trimmed: true, overlay: {} };
+
+test("a Chart is measured in the words Review and the library both use", () => {
+  assert.equal(measured(view(CHART, { ...READ, trimmed: false })), "3 rows × 4 columns");
+});
+
+test("one colour is a colour and the rest are colours", () => {
+  assert.equal(paletteWords(1), "1 colour");
+  assert.equal(paletteWords(7), "7 colours");
+});
+
+test("the chooser is hidden when the parse offered one answer", () => {
+  const shown = view(V1, READ);
+  assert.equal(separationChoices(V1, shown).hidden, true);
+});
+
+test("the answers are labelled by the count the knitter holds against their yarns", () => {
+  const shown = view(CHART, READ);
+  const { hidden, labels } = separationChoices(CHART, shown);
+  assert.equal(hidden, false);
+  assert.deepEqual(labels, ["2 colours", "3 colours"]);
+});
+
+test("the answer marked is the one being read, not the knitter's choice", () => {
+  // Chosen nothing: the parser's default is what is on screen, so it is marked.
+  assert.equal(separationChoices(CHART, view(CHART, READ)).marked, 0);
+  const chosen = { ...READ, separation: 1 };
+  assert.equal(separationChoices(CHART, view(CHART, chosen)).marked, 1);
+});
+
+test("a crop that landed clean says nothing at all", () => {
+  const said = blankWords({ blank: { top: 0, bottom: 0, left: 0, right: 0 }, trimmed: true });
+  assert.equal(said.hidden, true);
+});
+
+test("the blank lines are counted per direction, singular and plural", () => {
+  const one = blankWords({ blank: { top: 1, bottom: 0, left: 0, right: 1 }, trimmed: true });
+  assert.equal(one.words, "1 blank row and 1 blank column hidden");
+  const many = blankWords({ blank: { top: 1, bottom: 1, left: 2, right: 0 }, trimmed: true });
+  assert.equal(many.words, "2 blank rows and 2 blank columns hidden");
+});
+
+test("a Chart blank in one direction only says only that", () => {
+  const said = blankWords({ blank: { top: 2, bottom: 0, left: 0, right: 0 }, trimmed: true });
+  assert.equal(said.words, "2 blank rows hidden");
+});
+
+test("the control offers the way back to whichever state the knitter is not in", () => {
+  const blank = { top: 1, bottom: 0, left: 0, right: 0 };
+  assert.equal(blankWords({ blank, trimmed: true }).control, "Show them");
+  const showing = blankWords({ blank, trimmed: false });
+  assert.equal(showing.control, "Hide them again");
+  assert.equal(showing.words, "1 blank row shown");
+});
+
+test("hiding the Rows beneath Row 1 keeps the knitter on the Row they were on", () => {
+  const shown = { trimmed: false, blank: { top: 1, bottom: 2, left: 0, right: 0 } };
+  const next = { trimmed: true, blank: { top: 1, bottom: 2, left: 0, right: 0 } };
+  assert.equal(rowAfterAdopting(5, shown, next), 3);
+  assert.equal(rowAfterAdopting(3, next, shown), 5); // and back again
+});
+
+test("a Row that would fall off the bottom lands on Row 1 instead", () => {
+  const shown = { trimmed: false, blank: { top: 0, bottom: 4, left: 0, right: 0 } };
+  const next = { trimmed: true, blank: { top: 0, bottom: 4, left: 0, right: 0 } };
+  assert.equal(rowAfterAdopting(2, shown, next), 1);
+});
+
+test("a decision that hides nothing beneath Row 1 leaves the Row alone", () => {
+  const blank = { top: 3, bottom: 0, left: 2, right: 0 };
+  assert.equal(rowAfterAdopting(4, { trimmed: false, blank }, { trimmed: true, blank }), 4);
+});
+
+test("Review and Knit are never both up, and neither is without a Chart", () => {
+  const reviewing = screenFor(REVIEW, true);
+  assert.deepEqual([reviewing.review, reviewing.knit, reviewing.chrome], [true, false, true]);
+  const knitting = screenFor(KNIT, true);
+  assert.deepEqual([knitting.review, knitting.knit, knitting.chrome], [false, true, true]);
+  const empty = screenFor(REVIEW, false);
+  assert.deepEqual([empty.review, empty.knit, empty.chrome], [false, false, false]);
+});
+
+test("the way out of a mode is named for where it goes", () => {
+  assert.equal(screenFor(REVIEW, true).switchLabel, "Knit this chart");
+  assert.equal(screenFor(KNIT, true).switchLabel, "Review this parse");
+});

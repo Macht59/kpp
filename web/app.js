@@ -17,17 +17,24 @@ import {
   rowIndex,
   rowNumber,
   runsOfRow,
-  separations,
   view,
 } from "./chart.js";
 import { corners, grabbedAnchor, rectFrom, wholePixels } from "./crop.js";
 import { askToKeep, forget, keep, remember, restore, spaceLeft, stored } from "./library.js";
+import {
+  KNIT,
+  REVIEW,
+  blankWords,
+  measured,
+  paletteWords,
+  rowAfterAdopting,
+  screenFor,
+  separationChoices,
+} from "./screen.js";
 
 const PARSE_TIMEOUT_MS = 30_000; // against a measured ~10 s parse
 const HANDLE_CSS_PX = 11; // drawn radius; grabbed at twice that, a 44 px target
 const MAX_ZOOM = 20; // 3.2 px per Cell fit-width on the widest corpus chart, so 20x is a fat Cell
-const REVIEW = "review";
-const KNIT = "knit";
 const REPARSED = " (re-parse)"; // so two crops of one image are two names in the library
 const OFFLINE =
   "Parsing needs a connection, and there isn't one. Charts you have already " +
@@ -418,9 +425,6 @@ function sized(chart, state) {
   }
 }
 
-/** How big a Chart is, in the words Review and the library both use. */
-const measured = (chart) => `${rowCount(chart)} rows × ${colCount(chart)} columns`;
-
 function beside(label, act) {
   const button = document.createElement("button");
   button.className = "beside";
@@ -504,10 +508,11 @@ async function deleteChart(id, name) {
 /** Show Review, Knit, or neither. The two are navigation models, so only one is up. */
 function setMode(wanted) {
   mode = chart ? wanted : null;
-  review.hidden = mode !== REVIEW;
-  knit.hidden = mode !== KNIT;
-  modeSwitch.hidden = settings.hidden = mode === null;
-  modeSwitch.textContent = mode === REVIEW ? "Knit this chart" : "Review this parse";
+  const screen = screenFor(mode, chart !== null);
+  review.hidden = !screen.review;
+  knit.hidden = !screen.knit;
+  modeSwitch.hidden = settings.hidden = !screen.chrome;
+  modeSwitch.textContent = screen.switchLabel;
   if (mode === REVIEW) resetView(); // the survey starts from the whole Chart every time
 }
 
@@ -524,9 +529,8 @@ modeSwitch.addEventListener("click", () => setMode(mode === REVIEW ? KNIT : REVI
 function drawFacts() {
   // Stated from `cells` rather than from `dimensions`: the contract declares
   // both and they agree, but only one of them is the Chart that gets knitted.
-  const entries = shown.palette.length;
   size.textContent = measured(shown);
-  paletteSize.textContent = `${entries} ${entries === 1 ? "colour" : "colours"}`;
+  paletteSize.textContent = paletteWords(shown.palette.length);
   paletteList.replaceChildren(
     ...shown.palette.map((colour, entry) => pickable(colour, entry, arm)),
   );
@@ -551,8 +555,8 @@ function drawFacts() {
  * Row must not have the instructions change under them.
  */
 function drawSeparations() {
-  const labels = separations(chart).map(({ colours }) => `${colours} colours`);
-  separationChoice.hidden = labels.length < 2;
+  const { hidden, labels, marked } = separationChoices(chart, shown);
+  separationChoice.hidden = hidden;
   const buttons = () => [...separationList.querySelectorAll("button")];
   // Built again only when the answers themselves changed, which means another
   // Chart. Replacing the button the knitter just tapped takes the focus off it,
@@ -560,10 +564,8 @@ function drawSeparations() {
   // is the whole point of it — would be dropped out of the list at every tap.
   if (buttons().map((button) => button.textContent).join() !== labels.join())
     separationList.replaceChildren(...labels.map(choosable));
-  // `shown`, not `chosenView`: a knitter who has chosen nothing is still reading
-  // the Chart at the parser's default, and that is the answer to mark.
   for (const [at, button] of buttons().entries())
-    button.setAttribute("aria-pressed", String(at === shown.separation));
+    button.setAttribute("aria-pressed", String(at === marked));
 }
 
 /** One answer: the colour count, tappable, marked when it is the one on screen. */
@@ -590,11 +592,7 @@ function adopt(wanted) {
   } catch (failure) {
     return say(error, failure.message);
   }
-  // Row 1 is the bottom of the Chart, so the blank Rows hidden beneath it
-  // renumber every Row above — whether the knitter hid them by hand or a finer
-  // Separation stopped counting one of them as white. The knitter stays on the
-  // Row they were on either way.
-  selected = Math.max(selected + hiddenBelow(shown) - hiddenBelow(next), 1);
+  selected = rowAfterAdopting(selected, shown, next);
   // An entry of a Palette that is about to be shorter is armed at nothing.
   if (picked !== null && picked >= next.palette.length) picked = null;
   const resized = rowCount(next) !== rowCount(shown) || colCount(next) !== colCount(shown);
@@ -609,24 +607,13 @@ function adopt(wanted) {
   if (resized) resetView();
 }
 
-/** How many Rows sit hidden beneath Row 1 — none, when nothing is hidden. */
-const hiddenBelow = (chart) => (chart.trimmed ? chart.blank.bottom : 0);
-
-/**
- * What the crop caught beyond the pattern, and the way to have it back. A Chart
- * two Rows smaller than the knitter expected is explained rather than
- * suspicious — and a pattern that really does have a white edge Row is one tap
- * from showing it. Silent when the crop landed clean, which is most of them.
- */
+/** What the crop caught beyond the pattern, and the way to have it back. */
 function drawTrim() {
-  const { top, bottom, left, right } = shown.blank;
-  const found = [blanks(top + bottom, "row"), blanks(left + right, "column")].filter(Boolean);
-  trim.hidden = !found.length;
-  trimWords.textContent = `${found.join(" and ")} ${chosenView.trimmed ? "hidden" : "shown"}`;
-  showBlanks.textContent = chosenView.trimmed ? "Show them" : "Hide them again";
+  const said = blankWords(shown);
+  trim.hidden = said.hidden;
+  trimWords.textContent = said.words;
+  showBlanks.textContent = said.control;
 }
-
-const blanks = (count, line) => count && `${count} blank ${line}${count === 1 ? "" : "s"}`;
 
 // Hiding is a default and not a rule: the knitter whose pattern has a white edge
 // Row shows it again here, and that decision is kept with the Chart.

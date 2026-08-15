@@ -12,7 +12,7 @@
 // the tests see; keep the `kpp-shell-` prefix, the build rewrites the whole string.
 const VERSION = "kpp-shell-dev";
 
-const SHELL = ["/", "/app.js", "/chart.js", "/crop.js", "/library.js", "/manifest.webmanifest", "/icon.png"];
+const SHELL = ["/", "/app.js", "/chart.js", "/crop.js", "/library.js", "/screen.js", "/manifest.webmanifest", "/icon.png"];
 
 // Cache-first, so a shell file changed on the server is only picked up by the
 // next VERSION. Nothing here is versioned in its filename, so a stale app.js
