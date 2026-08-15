@@ -44,6 +44,9 @@ const modeSwitch = document.getElementById("mode");
 const review = document.getElementById("review");
 const doubt = document.getElementById("doubt");
 const size = document.getElementById("size");
+const trim = document.getElementById("trim");
+const trimWords = document.getElementById("trim-words");
+const showBlanks = document.getElementById("show-blanks");
 const paletteSize = document.getElementById("palette-size");
 const paletteList = document.getElementById("palette");
 const paintHint = document.getElementById("paint-hint");
@@ -229,7 +232,7 @@ async function parse(image, { x, y, w, h }) {
  * does.
  */
 function keptView({ separation, trimmed, overlay }) {
-  return { separation: separation ?? 0, trimmed: trimmed ?? false, overlay: overlay ?? {} };
+  return { separation: separation ?? 0, trimmed: trimmed ?? true, overlay: overlay ?? {} };
 }
 
 /** A freshly parsed Chart is unverified, so it opens in Review, at its bottom Row. */
@@ -351,9 +354,18 @@ function described({ chart, ...kept }) {
   // Through the view, like everything else that counts Cells: the size in the
   // list is the Chart the knitter opens, not the one that was parsed.
   detail.textContent = isReadable(chart)
-    ? measured(view(chart, keptView(kept)))
+    ? sized(chart, keptView(kept))
     : "saved by a newer version of this app";
   return detail;
+}
+
+/** The size of a Chart on the shelf, or why it has none to state. */
+function sized(chart, state) {
+  try {
+    return measured(view(chart, state));
+  } catch (failure) {
+    return failure.message; // all white space: the shelf says so rather than "0 rows"
+  }
 }
 
 /** How big a Chart is, in the words Review and the library both use. */
@@ -409,7 +421,14 @@ async function openChart(id) {
   stage.hidden = true;
   crop = null;
   rectangle.disabled = whole.disabled = true;
-  redraw();
+  try {
+    redraw();
+  } catch (failure) {
+    // A Chart kept before Blank edges were hidden can turn out to be nothing but
+    // white space. Refused with the way out, rather than opened empty.
+    setMode(null);
+    return say(error, failure.message);
+  }
   frameTheImage();
   showImage(false);
   drawFacts();
@@ -472,8 +491,35 @@ function drawFacts() {
     ...shown.palette.map((colour, entry) => pickable(colour, entry, paintRun)),
   );
   doubt.hidden = !cropIsDoubtful(chart);
+  drawTrim();
   showArmed();
 }
+
+/**
+ * What the crop caught beyond the pattern, and the way to have it back. A Chart
+ * two Rows smaller than the knitter expected is explained rather than
+ * suspicious — and a pattern that really does have a white edge Row is one tap
+ * from showing it. Silent when the crop landed clean, which is most of them.
+ */
+function drawTrim() {
+  const { top, bottom, left, right } = shown.blank;
+  const found = [blanks(top + bottom, "row"), blanks(left + right, "column")].filter(Boolean);
+  trim.hidden = !found.length;
+  trimWords.textContent = `${found.join(" and ")} ${chosenView.trimmed ? "hidden" : "shown"}`;
+  showBlanks.textContent = chosenView.trimmed ? "Show them" : "Hide them again";
+}
+
+const blanks = (count, line) => count && `${count} blank ${line}${count === 1 ? "" : "s"}`;
+
+// Hiding is a default and not a rule: the knitter whose pattern has a white edge
+// Row shows it again here, and that decision is kept with the Chart.
+showBlanks.addEventListener("click", () => {
+  chosenView = { ...chosenView, trimmed: !chosenView.trimmed };
+  redraw(); // before the frame: the window is cut to the size of the Chart being read
+  frameTheImage();
+  drawFacts();
+  resetView();
+});
 
 /**
  * One Palette entry: the count of entries the eye catches rather than reads, and
@@ -543,14 +589,23 @@ const reparsed = (name) => name + REPARSED;
  * fraction of a degree on the corpus, which is nothing at a Chart's scale.
  */
 function frameTheImage() {
-  const [x, y, w] = chart.source.crop;
-  const zoom = chart.source.image_width / w; // the crop, whatever its size, fills the window
+  const [x, y, w, h] = chart.source.crop;
+  // The window frames the part of the crop the Chart is read from, which with
+  // Blank edges hidden is inside the rectangle the knitter drew — otherwise the
+  // comparison would put the image's white margin against the Chart's Row 1.
+  const { top, bottom, left, right } = shown.trimmed ? shown.blank : NOTHING_HIDDEN;
+  const cellWide = w / (colCount(shown) + left + right);
+  const cellTall = h / (rowCount(shown) + top + bottom);
+  const framed = { x: x + left * cellWide, y: y + top * cellTall, w: w - (left + right) * cellWide };
+  const zoom = chart.source.image_width / framed.w; // the frame, whatever its size, fills the window
   cropped.style.aspectRatio = `${colCount(shown)} / ${rowCount(shown)}`;
   reviewImage.style.width = `${zoom * 100}%`;
-  // percentage margins resolve against the window's width, which is the crop's width
-  reviewImage.style.marginLeft = `${(-x * 100) / w}%`;
-  reviewImage.style.marginTop = `${(-y * 100) / w}%`;
+  // percentage margins resolve against the window's width, which is the frame's width
+  reviewImage.style.marginLeft = `${(-framed.x * 100) / framed.w}%`;
+  reviewImage.style.marginTop = `${(-framed.y * 100) / framed.w}%`;
 }
+
+const NOTHING_HIDDEN = { top: 0, bottom: 0, left: 0, right: 0 };
 
 /** Swap the two, leaving the pan and zoom where the knitter put them. */
 function showImage(wanted) {
@@ -630,6 +685,9 @@ function paintRun(entry) {
  */
 function redraw() {
   shown = view(chart, chosenView);
+  // Showing the Blank edges again makes the Chart taller and hiding them makes
+  // it shorter, so the Row the knitter is on may no longer exist.
+  selected = Math.min(selected, rowCount(shown));
   drawCells(reviewChart, shown.cells);
   drawCells(wholeChart, shown.cells);
   drawRow();

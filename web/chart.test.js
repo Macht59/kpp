@@ -38,8 +38,39 @@ const CHART = {
   ],
 };
 
-/** A Chart nobody has decided anything about yet: the state a fresh parse opens with. */
+/** A Chart read whole, Blank edges and all. */
 const UNREAD = { separation: 0, trimmed: false, overlay: {} };
+
+/** The state a fresh parse opens with: Blank edges hidden. */
+const TRIMMED = { ...UNREAD, trimmed: true };
+
+/**
+ * A chart with the crop's white space still round it: one blank line on each of
+ * the four edges, a white Cell in the middle that is not an edge and must stay,
+ * a near-white entry inside the gate and a light grey outside it.
+ */
+const MARGINED = {
+  schema_version: 1,
+  dimensions: { rows: 4, cols: 5 },
+  palette: [
+    { rgb: [255, 255, 255], name: null }, // L* 100
+    { rgb: [20, 20, 20], name: null }, // L* 7
+    { rgb: [245, 245, 245], name: null }, // L* 96.5 — inside the gate
+    { rgb: [200, 200, 200], name: null }, // L* 80.6 — outside it
+  ],
+  cells: [
+    [0, 0, 0, 0, 0],
+    [0, 1, 1, 1, 0],
+    [0, 1, 0, 1, 0],
+    [0, 0, 0, 0, 0],
+  ],
+};
+
+const withCells = (chart, cells) => ({
+  ...chart,
+  dimensions: { rows: cells.length, cols: cells[0].length },
+  cells,
+});
 
 /** One Row on its own, so a test can state the Cells it means. */
 const rowOf = (cells) => ({
@@ -284,6 +315,119 @@ test("a stored Chart from an unrecognised schema is refused rather than mis-read
   assert.equal(isReadable({ ...CHART, schema_version: "1" }), false); // a string is not the version
   assert.equal(isReadable({ ...CHART, schema_version: undefined }), false);
   assert.equal(isReadable(undefined), false); // nothing under that key at all
+});
+
+test("the white space the crop caught is hidden on all four edges", () => {
+  const shown = view(MARGINED, TRIMMED);
+  assert.deepEqual(shown.cells, [
+    [1, 1, 1],
+    [1, 0, 1],
+  ]);
+  assert.equal(rowCount(shown), 2);
+  assert.equal(colCount(shown), 3);
+  assert.deepEqual(shown.blank, { top: 1, bottom: 1, left: 1, right: 1 });
+});
+
+test("trimming stops at the first non-blank line, however deep the margin", () => {
+  const deep = withCells(MARGINED, [
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+    [0, 0, 1, 0],
+    [0, 0, 0, 0],
+  ]);
+  assert.deepEqual(view(deep, TRIMMED).cells, [[1]]);
+  assert.deepEqual(view(deep, TRIMMED).blank, { top: 2, bottom: 1, left: 2, right: 1 });
+});
+
+test("a blank line through the middle of the pattern is left exactly where it is", () => {
+  const gapped = withCells(MARGINED, [
+    [1, 1, 1],
+    [0, 0, 0], // white all the way across, and not an edge
+    [1, 0, 1],
+  ]);
+  assert.deepEqual(view(gapped, TRIMMED).cells, gapped.cells);
+  assert.deepEqual(view(gapped, TRIMMED).blank, { top: 0, bottom: 0, left: 0, right: 0 });
+});
+
+test("near-white counts as blank, and a light colour does not", () => {
+  // an edging round in pale grey is a Row of the pattern, not white space
+  const edged = withCells(MARGINED, [
+    [2, 2, 2],
+    [3, 3, 3],
+    [1, 1, 1],
+  ]);
+  assert.deepEqual(view(edged, TRIMMED).cells, [
+    [3, 3, 3],
+    [1, 1, 1],
+  ]);
+});
+
+test("a uniform non-white edge line is left alone", () => {
+  const bordered = withCells(MARGINED, [
+    [1, 1, 1],
+    [1, 0, 1],
+    [1, 1, 1],
+  ]);
+  assert.deepEqual(view(bordered, TRIMMED).cells, bordered.cells);
+});
+
+test("Non-stitch is not white, so an edge of it is not a Blank edge", () => {
+  const carved = withCells(MARGINED, [
+    [-1, -1, -1],
+    [1, 1, 1],
+  ]);
+  assert.deepEqual(view(carved, TRIMMED).cells, carved.cells);
+});
+
+test("showing the Blank edges again gives back the Chart untrimmed, Cell for Cell", () => {
+  assert.deepEqual(view(MARGINED, UNREAD).cells, MARGINED.cells);
+  assert.deepEqual(view(MARGINED, UNREAD).blank, view(MARGINED, TRIMMED).blank);
+});
+
+test("with the Blank edges hidden, Row 1 is the pattern's first Row", () => {
+  // two white Rows at the bottom of the image, which is where Row 1 is read from
+  const footed = withCells(MARGINED, [
+    [1, 1, 2],
+    [1, 0, 1],
+    [0, 0, 0],
+    [0, 0, 0],
+  ]);
+  const shown = view(footed, TRIMMED);
+  assert.equal(rowCount(shown), 2);
+  assert.deepEqual(cellsOfRow(shown, 1), [1, 0, 1]);
+  assert.deepEqual(counted(runsOfRow(shown, 1, LEFT_TO_RIGHT)), [
+    { entry: 1, count: 1 },
+    { entry: 0, count: 1 },
+    { entry: 1, count: 1 },
+  ]);
+});
+
+test("a Repaint lands on the Cell the knitter touched, with the Blank edges hidden", () => {
+  // Row 1 of the view is array Row 2 of the Chart, and Column 0 is Column 1
+  const painted = repaint(MARGINED, TRIMMED, { row: 1, from: 0, to: 0 }, 1);
+  assert.deepEqual(painted.overlay, { "2,1": 1 });
+  assert.deepEqual(cellsOfRow(view(MARGINED, painted), 1), [1, 0, 1]);
+  assert.deepEqual(view(MARGINED, painted).cells, [
+    [1, 1, 1],
+    [1, 0, 1],
+  ]);
+});
+
+test("Repaint's guards run against the Chart the knitter can see, not the parsed one", () => {
+  // three Rows and five Columns were parsed; two Rows and three Columns are read
+  const paint = (span) => repaint(MARGINED, TRIMMED, span, 1);
+  assert.throws(() => paint({ row: 3, from: 0, to: 0 }), /Row 3/);
+  assert.throws(() => paint({ row: 1, from: 0, to: 3 }), /outside/);
+  assert.deepEqual(paint({ row: 2, from: 2, to: 2 }).overlay, { "1,3": 1 });
+});
+
+test("a Chart that is nothing but white space is refused, not returned empty", () => {
+  const empty = withCells(MARGINED, [
+    [0, 0],
+    [0, 0],
+  ]);
+  assert.throws(() => view(empty, TRIMMED), /blank/);
+  assert.deepEqual(view(empty, UNREAD).cells, empty.cells); // shown whole, it is still readable
 });
 
 test("only a crop near the coin flip is doubtful, and a Chart without the signal never is", () => {

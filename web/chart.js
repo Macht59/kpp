@@ -108,23 +108,82 @@ export function runsOfRow(chart, row, direction) {
 }
 
 /**
+ * How light a Palette entry is, on Lab's `L*` scale — 0 is black and 100 is
+ * white. Only the lightness is wanted, so only `Y` of the XYZ conversion is
+ * computed.
+ */
+function lightness([red, green, blue]) {
+  const linear = (channel) => {
+    const scaled = channel / 255;
+    return scaled <= 0.04045 ? scaled / 12.92 : ((scaled + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = 0.2126 * linear(red) + 0.7152 * linear(green) + 0.0722 * linear(blue);
+  return luminance > 0.008856 ? 116 * Math.cbrt(luminance) - 16 : 903.3 * luminance;
+}
+
+// Where white space stops and the pattern starts. Only white counts: a solid
+// black border Row or a coloured edging round is part of someone's pattern and
+// must never be silently removed, so the gate sits at the very top of the
+// lightness scale rather than at "pale". `ponytail:` unfitted — no chart in the
+// corpus carries a white margin, so this is a starting value and production is
+// the first check.
+const BLANK_ABOVE = 95;
+
+/**
+ * How many Rows and Columns of white space the crop caught at each of the four
+ * edges. Trimmed inward until a non-blank line is met, so a blank line through
+ * the middle of the pattern is never reached. Repeated until nothing shrinks:
+ * cutting white Rows away can leave a Column white along its whole remaining
+ * length, and that Column is white space too.
+ */
+function blankEdges(cells, palette) {
+  // Non-stitch indexes no entry, so it is never blank — it is the knitter
+  // saying "not yarn here", which is a statement about the pattern.
+  const blank = palette.map((entry) => lightness(entry.rgb) >= BLANK_ABOVE);
+  const isBlank = (line) => line.every((cell) => blank[cell]);
+  let [top, bottom, left, right] = [0, cells.length, 0, cells[0].length];
+  const row = (at) => cells[at].slice(left, right);
+  const col = (at) => cells.slice(top, bottom).map((line) => line[at]);
+  for (let shrinking = true; shrinking; ) {
+    shrinking = false;
+    while (top < bottom && isBlank(row(top))) [top, shrinking] = [top + 1, true];
+    while (bottom > top && isBlank(row(bottom - 1))) [bottom, shrinking] = [bottom - 1, true];
+    while (left < right && isBlank(col(left))) [left, shrinking] = [left + 1, true];
+    while (right > left && isBlank(col(right - 1))) [right, shrinking] = [right - 1, true];
+  }
+  return { top, bottom: cells.length - bottom, left, right: cells[0].length - right };
+}
+
+/**
  * The Chart the knitter is reading, derived from the stored one and the
  * decisions they have made about it: which Separation to read it at, whether
  * Blank edges are hidden, and the Cells they have Repainted. It comes back in
  * exactly the shape every function above consumes, so they operate on the view
  * and never learn that a view exists.
  *
- * `separation` and `trimmed` are inert here — Separations and Blank edges land
- * in their own tickets. `overlay` is the Repaints, keyed by array Row and
- * Column of the stored Chart, so it holds still when the Chart is read
- * differently.
+ * `separation` is inert here — Separations land in their own ticket. `overlay`
+ * is the Repaints, keyed by array Row and Column of the stored Chart, so it
+ * holds still when the Chart is read differently. `trimmed` hides the Blank
+ * edges, which is the default: nothing is deleted, the Cells are simply not
+ * part of the Chart being read, and `blank` comes back either way so the
+ * knitter can be told what is being kept from them.
  */
-export function view(chart, { overlay = {} } = {}) {
-  return {
-    ...chart,
-    cells: chart.cells.map((cells, r) => cells.map((cell, c) => overlay[`${r},${c}`] ?? cell)),
-  };
+export function view(chart, { trimmed = false, overlay = {} } = {}) {
+  const painted = chart.cells.map((cells, r) => cells.map((cell, c) => overlay[`${r},${c}`] ?? cell));
+  const blank = blankEdges(painted, chart.palette);
+  if (!trimmed) return { ...chart, cells: painted, blank, trimmed };
+  const cells = painted
+    .slice(blank.top, painted.length - blank.bottom)
+    .map((row) => row.slice(blank.left, row.length - blank.right));
+  // A crop that caught nothing but the page around the chart: refused with the
+  // way out, because an empty Chart on screen tells the knitter nothing.
+  if (!cells.length || !cells[0].length)
+    throw new Error("This chart is blank — crop closer to the pattern and parse it again.");
+  return { ...chart, cells, blank, trimmed };
 }
+
+/** Where a view's Cell sits in the stored Chart: past the Blank edges it hides. */
+const offset = (shown) => (shown.trimmed ? shown.blank : { top: 0, left: 0 });
 
 /**
  * A Row's span of Cells — `from` to `to` inclusive, in either order, because a
@@ -157,8 +216,11 @@ export function repaint(chart, state, { row, from, to }, entry) {
   if (entry !== NON_STITCH && !known)
     throw new Error(`no Palette entry ${entry} in this Chart`);
 
-  const index = rowIndex(shown, row);
+  // Back through the Blank edges the view hides, so a Repaint is stored against
+  // the Cell of the parse the knitter's finger was actually over.
+  const { top, left } = offset(shown);
+  const index = rowIndex(shown, row) + top;
   const overlay = { ...state.overlay };
-  for (let col = first; col <= last; col += 1) overlay[`${index},${col}`] = entry;
+  for (let col = first; col <= last; col += 1) overlay[`${index},${col + left}`] = entry;
   return { ...state, overlay };
 }

@@ -156,6 +156,10 @@
       size below against your pattern, and adjust the crop and parse again if it
       is wrong.</p>
     <h2 id="size"></h2>
+    <!-- A chart two rows smaller than the pattern says is suspicious unless the
+         app says why, and a pattern that really does have a white edge row needs
+         the white space back in one tap. -->
+    <p id="trim" hidden><span id="trim-words"></span> <button id="show-blanks"></button></p>
     <p id="palette-size"></p>
     <ul id="palette"></ul>
     <p id="paint-hint"></p>
