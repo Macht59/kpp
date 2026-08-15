@@ -51,3 +51,8 @@ That no-op is handled rather than left to fail: the bump step exits cleanly when
 `git diff --quiet` finds nothing to commit, so an image job that produces an
 identical manifest does not turn the run red. A `git pull --rebase` precedes the
 push, so a commit landing during the build does not lose the deploy.
+
+**Observed.** `chore(deploy): kpp 0.1.1 [skip ci]` landed on `master` after the
+push, and `deploy/prod/deployment.yaml` now names `ghcr.io/macht59/kpp:0.1.1`.
+The commit triggered no further run. The published image serves and carries its
+own version: `const VERSION = "kpp-shell-0.1.1"` inside it.

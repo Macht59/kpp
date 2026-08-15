@@ -57,5 +57,14 @@ A `v0.0.0` seed tag was placed on `aba0534`, because semantic-release starts a
 tagless repository at `1.0.0` and has no setting for it. The first `feat` on
 `master` therefore computes `0.1.0`.
 
-Unproven until the first push: that the release actually cuts, and that
-`GITHUB_TOKEN` can create the GHCR package on first use.
+**Observed.** The first push cut `v0.1.0` and its GitHub Release from the seed
+tag exactly as intended. The image job then failed — `Cache export is not
+supported for the docker driver`, because the GHA build cache needs buildx's
+container driver and the runner's default docker driver cannot export one — so
+`0.1.0` is a release with no image behind it. `docker/setup-buildx-action` fixed
+it, committed as a `fix` precisely so that a release would be cut and the image
+job would run again; `0.1.1` is the first version with an image.
+
+`GITHUB_TOKEN` created the GHCR package on first use, and it is public: an
+anonymous manifest fetch against `ghcr.io/v2/macht59/kpp/manifests/0.1.1` returns
+200, so no `imagePullSecret` is needed in the cluster.

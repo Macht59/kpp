@@ -66,8 +66,10 @@ the prod directory builds.
 `../home-lab` loses `deploy/kpp.yaml`, its `kustomization.yaml` entry and its
 `dnsNames` entry; that directory still builds too.
 
-**Left to a human, in this order:** push `kpp`, let CI cut `0.1.0` and publish
-the image; push `../gitops`; confirm the pods in `istarhorse-prod` are serving;
+**Step 1 is done:** `kpp` is pushed, `0.1.1` is released and
+`ghcr.io/macht59/kpp:0.1.1` is public and pullable, and `deploy/prod` names it.
+
+**Left to a human, in this order:** push `../gitops`; confirm the pods in `istarhorse-prod` are serving;
 only then push `../home-lab`. The agent has no cluster credentials here
 (`kubectl` reports `the server has asked for the client to provide credentials`),
 so the confirmation step cannot be automated from this machine. The box at

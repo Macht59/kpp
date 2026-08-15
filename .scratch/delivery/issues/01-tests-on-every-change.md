@@ -35,5 +35,5 @@ corpus is in git, so the four chart screenshots are parsed for real.
 The `docker build` step passes `APP_VERSION=ci` so the build path CI exercises is
 the same one the release uses, minus the push.
 
-Not yet observed on GitHub's runners: the workflow has never run, because the
-branch has not been pushed. Everything it does was run by hand here first.
+**Observed green** on run 31859249002: `test` passed on the runner too — pytest
+on 3.14, `npm test`, and the unpushed `docker build`.
