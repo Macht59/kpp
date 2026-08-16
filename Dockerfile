@@ -1,7 +1,8 @@
 FROM python:3.14-slim
 
 # The release version, passed by CI. It becomes the service worker's cache name,
-# so a release hands a knitter the new shell instead of the cached old one.
+# so a release hands a knitter the new shell instead of the cached old one, and
+# the version the page shows at its foot.
 ARG APP_VERSION=dev
 
 WORKDIR /app
@@ -21,7 +22,10 @@ RUN python -m venv /opt/kpp \
 
 COPY --chown=knitter:knitter . .
 
-RUN sed -i "s|\"kpp-shell-[^\"]*\"|\"kpp-shell-${APP_VERSION}\"|" web/sw.js
+# One declaration, in two files that cannot share it — a service worker imports
+# no modules — so one command stamps both and no build can leave the cache name
+# and the page naming different releases.
+RUN sed -i "s|const VERSION = \"[^\"]*\"|const VERSION = \"${APP_VERSION}\"|" web/sw.js web/version.js
 
 USER knitter
 EXPOSE 8000

@@ -8,29 +8,41 @@
 // does once per Chart, at a table, on wifi.
 
 // Stamped with the release version at image build (see the Dockerfile), so every
-// release drops the old cache. The literal below is what local development and
-// the tests see; keep the `kpp-shell-` prefix, the build rewrites the whole string.
-const VERSION = "kpp-shell-dev";
+// release drops the old cache. `dev` is what local development and the tests
+// see. `version.js` holds the same declaration, in the same form, for the page
+// to show the knitter; one command stamps both files, so keep the shape of this
+// line if it ever moves.
+const VERSION = "dev";
+const CACHE = `kpp-shell-${VERSION}`;
 
-const SHELL = ["/", "/app.js", "/chart.js", "/crop.js", "/library.js", "/screen.js", "/manifest.webmanifest", "/icon.png"];
+const SHELL = ["/", "/app.js", "/chart.js", "/crop.js", "/library.js", "/screen.js", "/version.js", "/manifest.webmanifest", "/icon.png"];
 
 // Cache-first, so a shell file changed on the server is only picked up by the
 // next VERSION. Nothing here is versioned in its filename, so a stale app.js
 // against a fresh index.html is the failure a revalidating fetch would risk.
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(VERSION).then((cache) => cache.addAll(SHELL)));
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)));
 });
 
-// No `skipWaiting`, no `clients.claim`: a new VERSION drops the cache the open
-// page is being served from, and taking over that page mid-knit is exactly the
-// mismatched shell the cache-first rule above exists to prevent. The next time
-// the app is opened, it opens on the new one.
+// Nothing here calls `skipWaiting` on its own, and nothing calls `clients.claim`:
+// a new VERSION drops the cache the open page is being served from, and taking
+// over that page unasked is exactly the mismatched shell the cache-first rule
+// above exists to prevent. So the new worker installs beside the running one and
+// waits — and waits for every tab of the app to be closed, which no knitter with
+// the app on their home screen ever does. The page is what breaks the tie: it
+// sees the waiting worker, offers the knitter the reload, and sends this message
+// when they take it. `skipWaiting` under a page that is on its way to reloading
+// anyway swaps no code underneath anybody.
+self.addEventListener("message", (event) => {
+  if (event.data === "take over") self.skipWaiting();
+});
+
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
       .then((names) =>
-        Promise.all(names.filter((name) => name !== VERSION).map(caches.delete, caches)),
+        Promise.all(names.filter((name) => name !== CACHE).map(caches.delete, caches)),
       ),
   );
 });

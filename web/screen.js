@@ -49,6 +49,24 @@ export function separationChoices(chart, shown) {
   return { hidden: labels.length < 2, labels, marked: shown.separation };
 }
 
+/**
+ * Whether there is a new shell to move to, and the words for offering it.
+ *
+ * Only when a shell is already running: on a first install the new worker is the
+ * only worker there has ever been, and offering to reload onto the app the
+ * knitter is looking at is an interruption that buys nothing.
+ */
+export function updateOffer({ waiting, running }) {
+  return {
+    hidden: !(waiting && running),
+    words: "A new version of the app is ready.",
+    control: "Reload to update",
+  };
+}
+
+/** Which shell the knitter is running, for the foot of the page. */
+export const versionWords = (version) => `Version ${version}`;
+
 /** How many Rows sit hidden beneath Row 1 — none, when nothing is hidden. */
 const hiddenBelow = (chart) => (chart.trimmed ? chart.blank.bottom : 0);
 

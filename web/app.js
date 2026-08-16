@@ -30,7 +30,10 @@ import {
   rowAfterAdopting,
   screenFor,
   separationChoices,
+  updateOffer,
+  versionWords,
 } from "./screen.js";
+import { VERSION } from "./version.js";
 
 const PARSE_TIMEOUT_MS = 30_000; // against a measured ~10 s parse
 const HANDLE_CSS_PX = 11; // drawn radius; grabbed at twice that, a 44 px target
@@ -48,6 +51,9 @@ const rectangle = document.getElementById("rectangle");
 const whole = document.getElementById("whole");
 const status = document.getElementById("status");
 const error = document.getElementById("error");
+const update = document.getElementById("update");
+const updateWords = document.getElementById("update-words");
+const applyUpdate = document.getElementById("apply-update");
 const modeSwitch = document.getElementById("mode");
 const review = document.getElementById("review");
 const doubt = document.getElementById("doubt");
@@ -88,6 +94,7 @@ const directionWords = document.getElementById("direction-words");
 const library = document.getElementById("library");
 const keptList = document.getElementById("kept");
 const quota = document.getElementById("quota");
+const version = document.getElementById("version");
 
 let chart = null; // the parse, as it came back and as it stays
 let shown = null; // the Chart the knitter reads: `chart` under the decisions in `chosenView`
@@ -1081,7 +1088,54 @@ function say(element, message) {
 askToKeep();
 drawLibrary();
 
+// Said once, on load: the shell the page was served from is the shell it stays
+// on until the knitter takes an update and the page reloads onto the new one.
+version.textContent = versionWords(VERSION);
+
 // The shell, onto the device, so the app opens where the knitting happens. A
 // registration that fails — an old browser, or the page opened over file:// —
 // costs the offline case and nothing else, so the app carries on without it.
-navigator.serviceWorker?.register("/sw.js").catch(() => {});
+navigator.serviceWorker?.register("/sw.js").then(watchForNewShell).catch(() => {});
+
+/**
+ * A released shell installs beside the running one and then waits for every tab
+ * of the app to close — which, on the phone this app is installed to, is never.
+ * Reloading does not do it either: the page comes back under the worker it left.
+ * So the knitter is told there is a new version and picks the moment, and the
+ * worker is only let past when the page is already on its way to reloading onto
+ * it. Nothing swaps underneath a knitter mid-row.
+ */
+function watchForNewShell(registration) {
+  const offer = () => {
+    const said = updateOffer({
+      waiting: Boolean(registration.waiting),
+      running: Boolean(navigator.serviceWorker.controller),
+    });
+    update.hidden = said.hidden;
+    updateWords.textContent = said.words;
+    applyUpdate.textContent = said.control;
+  };
+
+  offer(); // one that installed while the app was closed is already waiting here
+  registration.addEventListener("updatefound", () =>
+    registration.installing?.addEventListener("statechange", offer),
+  );
+
+  // A browser checks for a new worker on navigation, and the home screen is a
+  // place an app is resumed rather than navigated to. Coming back to it is the
+  // moment to ask.
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) registration.update().catch(() => {});
+  });
+
+  // The worker took over, so the page is being served the old shell against a
+  // new cache — the one state the cache-first rule cannot survive. Reload into it.
+  let reloading = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (reloading) return;
+    reloading = true;
+    location.reload();
+  });
+
+  applyUpdate.addEventListener("click", () => registration.waiting?.postMessage("take over"));
+}

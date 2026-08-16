@@ -14,8 +14,10 @@ import pytest
 
 from server import app
 
-WEB = Path(__file__).parent.parent / "web"
+ROOT = Path(__file__).parent.parent
+WEB = ROOT / "web"
 SHELL = re.compile(r"const SHELL = \[(.*?)\]", re.DOTALL)
+STAMPED = re.compile(r'const VERSION = "([^"]*)"')
 
 
 @pytest.fixture
@@ -47,6 +49,32 @@ def test_the_shell_holds_every_module_the_client_loads(client):
     }
 
     assert modules <= set(precached())
+
+
+def test_the_release_stamp_reaches_every_file_that_names_a_version():
+    """One `sed` in the Dockerfile rewrites this declaration wherever it is held.
+
+    The worker's cache name and the version at the foot of the page are the same
+    release said twice — a worker imports no modules, so it cannot share the
+    page's copy. A file that holds one and is not named on that command keeps
+    saying `dev` in production, silently: the app tells a knitter it is a version
+    it is not, or a release lands and never turns the cache over.
+    """
+    holders = {
+        module.name: STAMPED.findall(module.read_text())
+        for module in WEB.glob("*.js")
+        if not module.name.endswith(".test.js")
+    }
+    declared = {name: found for name, found in holders.items() if found}
+
+    assert set(declared) == {"sw.js", "version.js"}
+    assert set(map(tuple, declared.values())) == {("dev",)}  # one each, unstamped in the repo
+
+    stamping = [
+        line for line in (ROOT / "Dockerfile").read_text().splitlines() if line.startswith("RUN sed")
+    ]
+    assert len(stamping) == 1, "the Dockerfile no longer stamps the version in one command"
+    assert all(f"web/{name}" in stamping[0] for name in declared)
 
 
 def test_the_service_worker_is_served_from_the_root_so_it_can_claim_the_whole_app(client):

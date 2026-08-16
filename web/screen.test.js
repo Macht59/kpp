@@ -12,7 +12,10 @@ import {
   rowAfterAdopting,
   screenFor,
   separationChoices,
+  updateOffer,
+  versionWords,
 } from "./screen.js";
+import { VERSION } from "./version.js";
 
 /** Two Separations over one Chart: white and off-white are one colour, then two. */
 const CHART = {
@@ -123,4 +126,25 @@ test("Review and Knit are never both up, and neither is without a Chart", () => 
 test("the way out of a mode is named for where it goes", () => {
   assert.equal(screenFor(REVIEW, true).switchLabel, "Knit this chart");
   assert.equal(screenFor(KNIT, true).switchLabel, "Review this parse");
+});
+
+test("a shell waiting behind a running one is offered, and named for what it does", () => {
+  const offered = updateOffer({ waiting: true, running: true });
+  assert.equal(offered.hidden, false);
+  assert.equal(offered.control, "Reload to update");
+});
+
+test("the first install is not an update, so the knitter is not asked to reload onto it", () => {
+  assert.equal(updateOffer({ waiting: true, running: false }).hidden, true);
+});
+
+test("a shell with nothing behind it says nothing", () => {
+  assert.equal(updateOffer({ waiting: false, running: true }).hidden, true);
+});
+
+test("the running shell says which version it is, whatever the build stamped", () => {
+  assert.equal(versionWords("0.2.0"), "Version 0.2.0");
+  // Unstamped is a version too — a knitter reading `dev` back over the phone is
+  // saying they are not on a release, which is the answer that was wanted.
+  assert.equal(versionWords(VERSION), "Version dev");
 });

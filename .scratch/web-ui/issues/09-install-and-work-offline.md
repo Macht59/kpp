@@ -27,6 +27,8 @@ both come without an engine download or a second toolchain.
 - [x] A stored Chart can be Selected, read, advanced through and Repainted offline
 - [x] Attempting to parse with no connection gives a plain message saying parsing needs one
 - [x] No background-sync queue
+- [x] A released shell reaches a knitter who already has the app, without them
+      closing every tab of it
 
 ## Comments
 
@@ -40,10 +42,31 @@ connection.
 Cache-first rather than revalidating, because nothing here is versioned in its
 filename and a fresh `index.html` against a stale `app.js` is the failure that
 would cause. For the same reason the worker does not call `skipWaiting` or
-`clients.claim`: activating a new `VERSION` drops the cache the open page is
-being served from, and claiming a page mid-knit is the mismatched shell the
-cache-first rule exists to prevent. A new shell is picked up the next time the
-app is opened.
+`clients.claim` on its own: activating a new `VERSION` drops the cache the open
+page is being served from, and claiming a page mid-knit is the mismatched shell
+the cache-first rule exists to prevent.
+
+**"A new shell is picked up the next time the app is opened" was wrong**, and
+this ticket said it for two releases. A waiting worker activates when the last
+client of its scope goes away, and reloading is not that — the page comes back
+under the worker it left. On a phone with the app on the home screen, nothing
+ever closes every client, so 0.2.0 sat installed and waiting behind 0.1.0
+indefinitely. The only way to the new app was a browser with no registration at
+all, which is why it looked correct in incognito and stale everywhere else.
+
+Reproduced in a browser before it was fixed: install v1, ship v2, reload three
+times — `caches` holds both versions, `registration.waiting` stays `installed`,
+and the page keeps serving v1. Close every tab and v2 activates.
+
+The fix leaves the invariant alone and gives the knitter the tie-break. The
+worker calls `skipWaiting` only on a `"take over"` message; the page watches for
+a waiting worker, says so, and sends that message when the knitter taps **Reload
+to update** — then reloads on `controllerchange`, so the swap lands on a page
+already on its way out rather than under a knitter mid-row. `registration.update()`
+runs when the app becomes visible, because an installed app is resumed rather
+than navigated to and a navigation is the only moment a browser checks by itself.
+The offer is silent on a first install, where the waiting worker is the only one
+there has ever been.
 
 `POST /api/parse` falls through to the network untouched — the worker answers
 GETs on this origin and nothing else — and there is no queue behind it. Offline,

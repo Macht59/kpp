@@ -92,6 +92,11 @@
      the table, so each is wide enough to read and no wider. */
   #separations button { width: auto; min-height: 44px; padding: 0 0.9rem; font-variant-numeric: tabular-nums; }
   #paint-hint { margin: 0; opacity: 0.8; }
+  /* Said where it is seen in either mode, and beside its own button, because an
+     update the knitter has to hunt for is one they never take. */
+  #update { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin: 0; padding: 0.75rem;
+    border: 1px solid currentColor; border-radius: 0.5rem; }
+  #update button { width: auto; padding: 0.5rem 0.9rem; }
   #doubt { padding: 0.75rem; margin: 0; border: 1px solid #b7791f; border-radius: 0.5rem; color: #b7791f; }
 
   /* The library: a thumbnail and a name to find a chart by sight, with rename
@@ -110,6 +115,10 @@
   #kept .beside { width: auto; flex: none; padding: 0.5rem 0.7rem; font-weight: 400; }
   #quota { margin: 0; opacity: 0.8; }
 
+  /* Last on the page and quiet about it: a knitter never needs the version, and
+     the one reporting something over the phone needs it to be right there. */
+  #version { text-align: center; font-size: 0.85rem; opacity: 0.7; }
+
   #stage { position: relative; width: fit-content; margin: 0 auto; }
   #overlay { position: absolute; inset: 0; touch-action: none; }
   #hint { margin: 0; text-align: center; opacity: 0.8; }
@@ -121,6 +130,12 @@
 </head>
 <body>
   <h1>Knitting Pattern Parser</h1>
+
+  <!-- A new shell waits rather than swapping itself in mid-knit, and waiting is
+       forever on a phone where the app is never closed. This is how the knitter
+       hears about it and picks the moment. -->
+  <p id="update" role="status" hidden><span id="update-words"></span>
+    <button id="apply-update"></button></p>
 
   <label class="file">
     Choose a chart image
@@ -225,6 +240,12 @@
       </select>
     </label>
   </div>
+
+  <!-- Which shell is actually on this device — the first thing to establish when
+       something is reported from a phone the app was installed on months ago. It
+       is the running version, so it still names the old one while an update
+       waits above; the two lines agree about where the knitter stands. -->
+  <footer id="version"></footer>
 
   <script type="module" src="app.js"></script>
 </body>
