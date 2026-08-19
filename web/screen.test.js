@@ -212,3 +212,12 @@ test("keeping proportions drives the field the knitter did not type in", () => {
   assert.deepEqual(keptInProportion(base, { cols: 10 }), { rows: 50, cols: 10 });
   assert.deepEqual(keptInProportion(base, { rows: 1 }), { rows: 1, cols: 1 }); // never none of a Chart
 });
+
+test("a Chart read at a size the knitter asked for does not renumber when the edges are shown", () => {
+  // The resample fills the Rows they asked for whether the Blank edges are in
+  // it or not, so nothing appears beneath Row 1 to renumber the Rows above.
+  const shown = { trimmed: true, blank: { top: 1, bottom: 3, left: 0, right: 0 } };
+  const next = { trimmed: false, blank: { top: 1, bottom: 3, left: 0, right: 0 } };
+  assert.equal(rowAfterAdopting(20, shown, next, { rows: 40, cols: 30 }), 20);
+  assert.equal(rowAfterAdopting(20, shown, next), 23); // and unresized, it renumbers as ever
+});

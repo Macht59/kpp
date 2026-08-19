@@ -76,3 +76,20 @@ resample — `nearest`, lifted out of `resampled` and read backwards — before 
 maps them back through the Blank edges. A Chart read larger has several Cells
 standing for one of the parse's, so painting any of them paints all of them;
 there is no finer Cell to record the correction against.
+
+**Review fixes.** Four things a review caught, all of them the Resize control's
+own: the Blank-edge toggle renumbered the Selected Row on a resized Chart, where
+the resample fills the same Rows and nothing is renumbered (`rowAfterAdopting`
+now takes the scale); re-typing the size already on screen counted as a Resize
+and sent the knitter to Row 1 (an unresized Chart is read at its own size, and
+that is what the comparison is against now); a refused size stayed in the box, so
+`change` never fired again on a retype (the boxes go back to the Chart on
+screen); and a paint drag on a Chart read larger left the Rows either side of the
+finger stale, because one parse Cell is several shown Rows (the canvas is redrawn
+whole while a scale is set, marked `ponytail:` with the cheaper fix).
+
+Two the review raised are older than this ticket and are not taken here: Undo
+does not know about Review paint drags (04's), and a Colorway keystroke costs a
+full redraw and a record write (02's). One is accepted as written: `blankWords`
+counts the Blank edges in the parse's Rows, which is what the crop caught,
+whatever size the Chart is read at.

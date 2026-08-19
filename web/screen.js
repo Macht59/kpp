@@ -76,9 +76,13 @@ const hiddenBelow = (chart) => (chart.trimmed ? chart.blank.bottom : 0);
  * above — whether they hid them by hand or a finer Separation stopped counting
  * one of them as white. They stay on the Row they were on either way, and never
  * off the bottom of the Chart.
+ *
+ * A Chart being read at a size the knitter asked for renumbers nothing: the
+ * resample fills those Rows whether the Blank edges are part of it or not, so
+ * showing them again leaves the Chart exactly as tall as it was.
  */
-export const rowAfterAdopting = (selected, shown, next) =>
-  Math.max(selected + hiddenBelow(shown) - hiddenBelow(next), 1);
+export const rowAfterAdopting = (selected, shown, next, scale) =>
+  scale ? selected : Math.max(selected + hiddenBelow(shown) - hiddenBelow(next), 1);
 
 /**
  * The Row the knitter stands on after a Resize: Row 1. The Chart they were

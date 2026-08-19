@@ -625,11 +625,14 @@ function adopt(wanted) {
   }
   // A Resize is the one decision that discards the Row the knitter was on: the
   // Chart has been sampled to another number of Rows, so theirs stands for a
-  // different part of the pattern at the size they have asked for.
+  // different part of the pattern at the size they have asked for. A Chart
+  // nobody has resized is being read at its own size, which is what says whether
+  // this decision is a Resize at all — re-typing the size on screen is not one.
+  const size = { rows: rowCount(shown), cols: colCount(shown) };
   selected = rowAfterResizing(
-    rowAfterAdopting(selected, shown, next),
-    chosenView.scale,
-    wanted.scale,
+    rowAfterAdopting(selected, shown, next, wanted.scale),
+    chosenView.scale ?? size,
+    wanted.scale ?? size,
   );
   // An entry of a Palette that is about to be shorter is armed at nothing.
   if (picked !== null && picked >= next.palette.length) picked = null;
@@ -688,6 +691,10 @@ function resize(field) {
     ? keptInProportion(unscaledSize(), typed)
     : { rows: rowCount(shown), cols: colCount(shown), ...typed };
   adopt({ ...chosenView, scale });
+  // A size `adopt` refused leaves the box holding a number the Chart is not at,
+  // and `change` would not fire again if they retyped it — so the boxes are put
+  // back to the Chart on screen, under the error saying why.
+  drawResize();
 }
 
 // On change rather than on every keystroke: "140" typed a digit at a time is a
@@ -1184,7 +1191,14 @@ function paintTo(col) {
   // move is exactly the cost this function is written to avoid.
   chosenView = repaint(chart, painting.base, span, picked, shown);
   shown = view(chart, chosenView);
-  drawRowOfCells(reviewChart, rowIndex(shown, painting.row));
+  // A Chart read larger has several of its Rows standing for one of the parse's,
+  // so a Repaint in the Row under the finger changes the Rows either side of it
+  // too and one Row redrawn would leave them stale. `ponytail:` the whole canvas
+  // per pointer move on a resized Chart — draw only the Rows the resample took
+  // from the painted one if a knitter ever feels this, which is the same size
+  // ceiling ADR-0007 ships uncapped.
+  if (chosenView.scale) drawCells(reviewChart, shown.cells);
+  else drawRowOfCells(reviewChart, rowIndex(shown, painting.row));
 }
 
 /** Where the fingers are: their centre in the viewport, and how far apart they are. */
