@@ -81,6 +81,25 @@ export const rowAfterAdopting = (selected, shown, next) =>
   Math.max(selected + hiddenBelow(shown) - hiddenBelow(next), 1);
 
 /**
+ * The Row a kept Chart opens on. A record written before Blank edges were ever
+ * hidden numbered its Row against the whole Chart, and opens hidden now — so
+ * the Row the knitter stopped on has moved down by the blank Rows beneath it.
+ * That is the same renumbering `rowAfterAdopting` does when they hide the edges
+ * by hand, and without it a knitter comes back to a Row they were never on.
+ *
+ * A shift that would land beneath Row 1 is not renumbering the same Chart: a
+ * knitter who stopped on Row 3 stopped on the pattern's Row 3, so a record that
+ * says otherwise is wrong about the record rather than about the knitter, and
+ * the Row it stored is kept whole. Clamping it to 1 instead sent them back to
+ * the bottom of a Chart they had been working up.
+ */
+export const rowOnOpening = (kept, shown) => {
+  if (kept.trimmed !== undefined) return kept.selected;
+  const shifted = kept.selected - hiddenBelow(shown);
+  return shifted >= 1 ? shifted : kept.selected;
+};
+
+/**
  * Which of the two navigation models is up, and what the way out of it is
  * called. Review and Knit are opposite ways of moving over the same Chart, so
  * only one is ever on screen, and neither is until there is a Chart to show.

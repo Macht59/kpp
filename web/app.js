@@ -28,6 +28,7 @@ import {
   measured,
   paletteWords,
   rowAfterAdopting,
+  rowOnOpening,
   screenFor,
   separationChoices,
   updateOffer,
@@ -324,17 +325,10 @@ async function keepThisChart(mine) {
   }
 }
 
-/**
- * The Row a kept Chart opens on. A record written before Blank edges were ever
- * hidden numbered its Row against the whole Chart, and opens hidden now — so
- * the Row the knitter stopped on has moved down by the blank Rows beneath it.
- * That is the same renumbering `showBlanks` does when they hide the edges by
- * hand, and without it a knitter comes back to a Row they were never on.
- */
+/** The Row a kept Chart opens on, once the Chart it opens as is known. */
 function openingRow(kept, state) {
-  if (kept.trimmed !== undefined || !state.trimmed) return kept.selected;
   try {
-    return Math.max(kept.selected - view(kept.chart, state).blank.bottom, 1);
+    return rowOnOpening(kept, view(kept.chart, state));
   } catch {
     return kept.selected; // nothing but white space: this Chart opens whole anyway
   }
@@ -356,6 +350,12 @@ async function persist() {
     say(error, failure.message);
   }
 }
+
+// iOS suspends a backgrounded page and never resumes it if the knitter kills
+// the app, so the fire-and-forget write `drawRow` started can die in flight.
+// This is the last moment the record can be written, and one more write of what
+// is already on screen costs nothing when it was not needed.
+window.addEventListener("pagehide", () => persist());
 
 /** Let go of the image a closed Chart was cropped from and compared against. */
 function revokeImage() {

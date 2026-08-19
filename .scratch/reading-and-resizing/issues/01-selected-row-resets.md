@@ -2,7 +2,7 @@
 
 **Blocked by:** None.
 
-**Status:** ready-for-agent
+**Status:** done — hypothesis reproduced (`rowOnOpening`, legacy record on Row 3 under 4 blank Rows came back as Row 1) and fixed
 
 **What to build:** a failing test first. This is the only defect in
 [the spec](../spec.md) and the only item whose cause is still a hypothesis —
@@ -42,9 +42,9 @@ Then, separately and regardless of the outcome: flush the record on `pagehide`.
 in flight. This cannot produce a reset to 1 on its own — it loses one Row
 change, not all of them — so it is a second fix, not the fix.
 
-- [ ] A test reproduces a Selected Row of 1 coming back from `openingRow` for a legacy record, before any change
-- [ ] A legacy record whose blank-Row shift would go below Row 1 keeps its stored Row
-- [ ] A legacy record whose shift lands at or above Row 1 still shifts, as it does today
-- [ ] A record that already has `trimmed` is untouched by any of this
-- [ ] The record is flushed on `pagehide`
-- [ ] If the hypothesis does *not* reproduce, say so in the comments and re-open the hunt rather than shipping a speculative fix
+- [x] A test reproduces a Selected Row of 1 coming back from `openingRow` for a legacy record, before any change
+- [x] A legacy record whose blank-Row shift would go below Row 1 keeps its stored Row
+- [x] A legacy record whose shift lands at or above Row 1 still shifts, as it does today
+- [x] A record that already has `trimmed` is untouched by any of this
+- [x] The record is flushed on `pagehide`
+- [x] If the hypothesis does *not* reproduce, say so in the comments and re-open the hunt rather than shipping a speculative fix

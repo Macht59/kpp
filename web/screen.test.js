@@ -10,6 +10,7 @@ import {
   measured,
   paletteWords,
   rowAfterAdopting,
+  rowOnOpening,
   screenFor,
   separationChoices,
   updateOffer,
@@ -112,6 +113,27 @@ test("a Row that would fall off the bottom lands on Row 1 instead", () => {
 test("a decision that hides nothing beneath Row 1 leaves the Row alone", () => {
   const blank = { top: 3, bottom: 0, left: 2, right: 0 };
   assert.equal(rowAfterAdopting(4, { trimmed: false, blank }, { trimmed: true, blank }), 4);
+});
+
+test("a Chart kept before the edges could be hidden opens on the Row it was left on", () => {
+  const shown = { trimmed: true, blank: { top: 0, bottom: 2, left: 0, right: 0 } };
+  assert.equal(rowOnOpening({ selected: 7 }, shown), 5);
+});
+
+test("a legacy Row the hidden edges would push below Row 1 is the Row the knitter was on", () => {
+  const shown = { trimmed: true, blank: { top: 0, bottom: 4, left: 0, right: 0 } };
+  assert.equal(rowOnOpening({ selected: 3 }, shown), 3);
+});
+
+test("a Chart opened with its edges shown is opened on the Row it was numbered against", () => {
+  const shown = { trimmed: false, blank: { top: 0, bottom: 4, left: 0, right: 0 } };
+  assert.equal(rowOnOpening({ selected: 3 }, shown), 3);
+});
+
+test("a record that says how it was read is opened at the Row it says", () => {
+  const shown = { trimmed: true, blank: { top: 0, bottom: 4, left: 0, right: 0 } };
+  assert.equal(rowOnOpening({ selected: 3, trimmed: true }, shown), 3);
+  assert.equal(rowOnOpening({ selected: 6, trimmed: false }, shown), 6);
 });
 
 test("Review and Knit are never both up, and neither is without a Chart", () => {
