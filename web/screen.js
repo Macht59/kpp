@@ -113,3 +113,13 @@ export function screenFor(mode, hasChart) {
     switchLabel: showing === REVIEW ? "Knit this chart" : "Review this parse",
   };
 }
+
+/**
+ * The separators between Readout chips, from where the browser laid the chips
+ * out: `→` on to the next Run, `↵` where the list wraps to the line below. They
+ * describe the list rather than the knitting — the chips are already in reading
+ * order, and the Reading direction has its own arrow above — so an arrow that
+ * pointed the other way would only say the Readout runs backwards, which it
+ * never does.
+ */
+export const readoutFlow = (tops) => tops.slice(1).map((top, before) => (top === tops[before] ? "→" : "↵"));

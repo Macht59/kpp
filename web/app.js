@@ -28,6 +28,7 @@ import {
   blankWords,
   measured,
   paletteWords,
+  readoutFlow,
   rowAfterAdopting,
   rowOnOpening,
   screenFor,
@@ -523,6 +524,7 @@ function setMode(wanted) {
   modeSwitch.hidden = settings.hidden = !screen.chrome;
   modeSwitch.textContent = screen.switchLabel;
   if (mode === REVIEW) resetView(); // the survey starts from the whole Chart every time
+  if (mode === KNIT) showFlow(); // a hidden Readout has no layout, so its chips were all on line 0
 }
 
 // Reviewing is a step, not a destination — and a parse error noticed at Row 88
@@ -800,7 +802,8 @@ function drawRow() {
 
   rowLabel.textContent = `Row ${selected} of ${rows} — ${stitches} stitches`;
   openChip = null; // a Row that has moved under the picker is not the Run it was opened for
-  readout.replaceChildren(...runs.map(chip));
+  readout.replaceChildren(...runs.map(chip).flatMap((item, at) => (at ? [separator(), item] : [item])));
+  showFlow();
   showOpenChip();
   previous.disabled = selected === 1;
   next.disabled = selected === rows;
@@ -825,6 +828,33 @@ function chip(run) {
   item.append(button);
   return item;
 }
+
+/**
+ * A gap between two chips, for the `→` or `↵` that `showFlow` writes into it.
+ * Decoration: a screen reader reads the chips in order already, and does not
+ * need "right arrow" forty times to hear it.
+ */
+function separator() {
+  const item = document.createElement("li");
+  item.className = "sep";
+  item.setAttribute("aria-hidden", "true");
+  return item;
+}
+
+/**
+ * Where the Readout carries on, which only the browser knows: the chips wrap
+ * wherever they no longer fit, so the line each one landed on is read back off
+ * the layout rather than worked out from the Runs.
+ */
+function showFlow() {
+  const chips = [...readout.querySelectorAll("li:not(.sep)")];
+  const glyphs = readoutFlow(chips.map((item) => item.offsetTop));
+  readout.querySelectorAll("li.sep").forEach((item, between) => (item.textContent = glyphs[between]));
+}
+
+// A narrower window wraps the Readout somewhere else, and the separators are
+// only right for the layout they were measured against.
+new ResizeObserver(showFlow).observe(readout);
 
 /** The Palette below the Readout, open for the tapped chip or shut. */
 function showOpenChip() {

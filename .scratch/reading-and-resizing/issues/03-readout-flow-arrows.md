@@ -2,7 +2,7 @@
 
 **Blocked by:** None.
 
-**Status:** ready-for-agent
+**Status:** done
 
 **What to build:** the smallest of the six, and pure presentation.
 
@@ -28,9 +28,9 @@ Detecting the wrap is the only real work: the chips are laid out by the browser,
 so the break points are only known after layout. Compare each chip's
 `offsetTop` to the previous one's.
 
-- [ ] A `→` sits between consecutive chips on the same line
-- [ ] A `↵` sits at each point where the list wraps
-- [ ] The glyphs do not change with Reading direction
-- [ ] Separators are hidden from assistive technology
-- [ ] The separators re-place themselves when the viewport width changes
-- [ ] A Readout of one Run has no separator at all
+- [x] A `→` sits between consecutive chips on the same line
+- [x] A `↵` sits at each point where the list wraps
+- [x] The glyphs do not change with Reading direction
+- [x] Separators are hidden from assistive technology
+- [x] The separators re-place themselves when the viewport width changes
+- [x] A Readout of one Run has no separator at all

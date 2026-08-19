@@ -52,6 +52,9 @@
     border: 1px solid currentColor; border-radius: 0.5rem;
     font-variant-numeric: tabular-nums;
   }
+  /* Fixed width, so swapping `→` for `↵` can never move the wrap that
+     decided which of the two it is. */
+  #readout .sep { display: flex; align-items: center; justify-content: center; width: 1rem; opacity: 0.7; }
   .swatch { width: 28px; height: 28px; border: 1px solid currentColor; border-radius: 0.25rem; }
   /* Two pickers, one primitive: the Palette bar arms a Repaint in Review, and
      the same buttons under a tapped Run chip repaint it in Knit. */

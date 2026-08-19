@@ -9,6 +9,7 @@ import {
   blankWords,
   measured,
   paletteWords,
+  readoutFlow,
   rowAfterAdopting,
   rowOnOpening,
   screenFor,
@@ -169,4 +170,17 @@ test("the running shell says which version it is, whatever the build stamped", (
   // Unstamped is a version too — a knitter reading `dev` back over the phone is
   // saying they are not on a release, which is the answer that was wanted.
   assert.equal(versionWords(VERSION), "Version dev");
+});
+
+test("consecutive chips on one line are joined by a continue arrow", () => {
+  assert.deepEqual(readoutFlow([0, 0, 0]), ["→", "→"]);
+});
+
+test("a chip that starts a new line is reached by a wrap mark", () => {
+  assert.deepEqual(readoutFlow([0, 0, 52, 52, 104]), ["→", "↵", "→", "↵"]);
+});
+
+test("a Readout of one Run has no separator at all", () => {
+  assert.deepEqual(readoutFlow([0]), []);
+  assert.deepEqual(readoutFlow([]), []);
 });
