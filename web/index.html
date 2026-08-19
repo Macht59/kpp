@@ -92,6 +92,13 @@
      the table, so each is wide enough to read and no wider. */
   #separations button { width: auto; min-height: 44px; padding: 0 0.9rem; font-variant-numeric: tabular-nums; }
   #paint-hint { margin: 0; opacity: 0.8; }
+  #colorways { display: flex; flex-direction: column; gap: 0.4rem; }
+  #colorways-hint { margin: 0; opacity: 0.8; }
+  #colorway-list { display: flex; flex-wrap: wrap; gap: 0.5rem; list-style: none; margin: 0; padding: 0; }
+  #colorway-list li { display: flex; align-items: center; gap: 0.5rem; }
+  /* Wide enough for a yarn name, tall enough to hit — a name is typed once and
+     read at every glance after it. */
+  #colorway-list input { font: inherit; min-height: 44px; width: 9rem; padding: 0 0.5rem; }
   /* Said where it is seen in either mode, and beside its own button, because an
      update the knitter has to hunt for is one they never take. */
   #update { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin: 0; padding: 0.75rem;
@@ -191,6 +198,14 @@
     </div>
     <ul id="palette"></ul>
     <p id="paint-hint"></p>
+    <!-- The knitter's own words for the colours. Their paper pattern calls them
+         something, and Colour A is not it. Its own block rather than a tap on
+         the swatch above: that swatch arms a Repaint, and a knitter correcting
+         Cells who holds it a beat too long must not get a keyboard. -->
+    <div id="colorways">
+      <p id="colorways-hint">Call these colours what your pattern calls them:</p>
+      <ul id="colorway-list"></ul>
+    </div>
     <div id="viewport">
       <div id="pannable">
         <canvas id="review-chart"></canvas>

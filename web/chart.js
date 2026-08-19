@@ -52,11 +52,19 @@ export function cropIsDoubtful(chart) {
 }
 
 /**
+ * The letter an entry answers to before anyone names it — its position in the
+ * Palette. Named separately from the label because the box a knitter types a
+ * Colorway into has to say which entry it belongs to whether or not it is
+ * filled in, and their own name in that place would say nothing.
+ */
+export const entryLetter = (entry) => `Colour ${LETTERS[entry] ?? entry + 1}`;
+
+/**
  * What a chip calls a Palette entry. The stateless service leaves `name` null,
  * so the position stands in until a Colorway is mapped to it.
  */
 export function entryLabel(chart, entry) {
-  return chart.palette[entry].name ?? `Colour ${LETTERS[entry] ?? entry + 1}`;
+  return chart.palette[entry].name ?? entryLetter(entry);
 }
 
 /**
@@ -237,6 +245,19 @@ function paletteOf(chart, merge, counts) {
   });
 }
 
+/**
+ * The Palette under the names the knitter has given its entries. Keyed by
+ * Separation as well as entry, because `paletteOf` derives a Palette per
+ * Separation and entry 2 at three colours is a different colour from entry 2 at
+ * four — a name keyed by entry alone would put their word on a colour they
+ * never named. An empty name is no name: the positional letter comes back,
+ * which is what clearing the box has to mean.
+ */
+const named = (palette, names, separation) =>
+  palette.map((entry, at) =>
+    names[`${separation},${at}`] ? { ...entry, name: names[`${separation},${at}`] } : entry,
+  );
+
 // The Cells of the parse behind each finest Palette entry — the weights the
 // derived colours are averaged with. Of the parse and not of the Repaints over
 // it, for the same reason the Blank edges are, and kept for the same one: a
@@ -264,14 +285,16 @@ function countsOf(chart) {
  * to show a knitter, so the view's Palette is always a Separation's. `overlay`
  * is the Repaints, keyed by array Row and Column of the stored Chart and holding
  * finest-Palette entries, so they hold still when the Chart is read differently.
- * `trimmed` hides the Blank edges — the state a Chart is opened with, see
+ * `names` is what the knitter calls the Palette entries, keyed by Separation as
+ * well as entry, and applied here so that every label downstream is theirs
+ * without knowing a Colorway can be named. `trimmed` hides the Blank edges — the state a Chart is opened with, see
  * `keptView`: nothing is deleted, the Cells are simply not part of the Chart
  * being read, and `blank` comes back either way so the knitter can be told what
  * is being kept from them.
  */
-export function view(chart, { separation, trimmed = false, overlay = {} } = {}) {
+export function view(chart, { separation, trimmed = false, overlay = {}, names = {} } = {}) {
   const { index, merge } = separationOf(chart, separation);
-  const palette = paletteOf(chart, merge, countsOf(chart));
+  const palette = named(paletteOf(chart, merge, countsOf(chart)), names, index);
   const read = (cell) => (cell === NON_STITCH ? NON_STITCH : merge[cell]);
   const painted = chart.cells.map((cells, r) =>
     cells.map((cell, c) => read(overlay[`${r},${c}`] ?? cell)),

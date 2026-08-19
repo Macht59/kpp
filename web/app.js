@@ -9,6 +9,7 @@ import {
   colCount,
   cropIsDoubtful,
   entryLabel,
+  entryLetter,
   isReadable,
   opposite,
   readingDirection,
@@ -67,6 +68,7 @@ const separationList = document.getElementById("separations");
 const paletteSize = document.getElementById("palette-size");
 const paletteList = document.getElementById("palette");
 const paintHint = document.getElementById("paint-hint");
+const colorwayList = document.getElementById("colorway-list");
 const chipPalette = document.getElementById("chip-palette");
 const viewport = document.getElementById("viewport");
 const pannable = document.getElementById("pannable");
@@ -249,10 +251,10 @@ async function parse(image, { x, y, w, h }) {
  * existed simply has none of them, and lands on the same defaults a fresh parse
  * does.
  */
-function keptView({ separation, trimmed, overlay }) {
+function keptView({ separation, trimmed, overlay, names }) {
   // No Separation of their own means the parser's default, which `view` knows
   // and a stored record does not — a v1 Chart has no default to record.
-  return { separation, trimmed: trimmed ?? true, overlay: overlay ?? {} };
+  return { separation, trimmed: trimmed ?? true, overlay: overlay ?? {}, names: names ?? {} };
 }
 
 /** A freshly parsed Chart is unverified, so it opens in Review, at its bottom Row. */
@@ -538,16 +540,14 @@ function drawFacts() {
   // both and they agree, but only one of them is the Chart that gets knitted.
   size.textContent = measured(shown);
   paletteSize.textContent = paletteWords(shown.palette.length);
-  paletteList.replaceChildren(
-    ...shown.palette.map((colour, entry) => pickable(colour, entry, arm)),
-  );
-  chipPalette.replaceChildren(
-    ...shown.palette.map((colour, entry) => pickable(colour, entry, paintRun)),
-  );
+  drawPalettes();
+  // Not from `drawPalettes`: rebuilding a box the knitter is typing in would
+  // take the keyboard away mid-name, and a name is drawn from here only when
+  // the Palette itself is another one — another Chart, or another Separation.
+  colorwayList.replaceChildren(...shown.palette.map(nameable));
   doubt.hidden = !cropIsDoubtful(chart);
   drawTrim();
   drawSeparations();
-  showArmed();
 }
 
 /**
@@ -627,6 +627,64 @@ function drawTrim() {
 showBlanks.addEventListener("click", () =>
   adopt({ ...chosenView, trimmed: !chosenView.trimmed }),
 );
+
+/**
+ * The two pickers, under whatever the entries are called now. Both are built
+ * from the Palette on screen, so a Colorway named in Review is on the Knit chip
+ * picker before the knitter gets there.
+ */
+function drawPalettes() {
+  paletteList.replaceChildren(
+    ...shown.palette.map((colour, entry) => pickable(colour, entry, arm)),
+  );
+  chipPalette.replaceChildren(
+    ...shown.palette.map((colour, entry) => pickable(colour, entry, paintRun)),
+  );
+  showArmed();
+}
+
+/**
+ * One Palette entry under the knitter's own word for it. The swatch is the
+ * colour and nothing else here — the one above arms a Repaint, and two swatches
+ * that do different things is better than one that does both by how long it is
+ * held. Nothing is validated: two entries called `M` is their notation, and a
+ * complaint about it on a phone is worse than the duplicate.
+ */
+function nameable(colour, entry) {
+  const item = document.createElement("li");
+  const swatch = document.createElement("span");
+  const box = document.createElement("input");
+  swatch.className = "swatch";
+  swatch.style.background = rgb(colour.rgb);
+  box.type = "text";
+  box.value = chosenView.names[`${shown.separation},${entry}`] ?? "";
+  // The letter the entry answers to while it is unnamed, which is also what
+  // clearing the box gives back — so it is the letter here even once they have
+  // typed over it, and not whatever they typed.
+  box.placeholder = entryLetter(entry);
+  box.setAttribute("aria-label", `Name for ${entryLetter(entry)}`);
+  box.addEventListener("input", () => rename(entry, box.value));
+  item.append(swatch, box);
+  return item;
+}
+
+/**
+ * What the knitter calls a Palette entry, kept with the Chart. Keyed by the
+ * Separation it was typed at as well as the entry: entry 3 at seven colours is
+ * not entry 3 at nine, and their word must not land on a colour they never saw.
+ *
+ * Everything that says a colour's name says it through `entryLabel` over the
+ * view, so redrawing is all there is to do — and `drawRow` writes the record,
+ * as it does for every other decision.
+ */
+function rename(entry, name) {
+  chosenView = {
+    ...chosenView,
+    names: { ...chosenView.names, [`${shown.separation},${entry}`]: name },
+  };
+  redraw(); // the Cells are untouched; the labels over them are not
+  drawPalettes();
+}
 
 /**
  * One Palette entry: the count of entries the eye catches rather than reads, and

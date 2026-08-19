@@ -569,6 +569,25 @@ test("a Chart parsed before Separations existed is read as the single one it has
   assert.equal(entryLabel(shown, 2), "Rust");
 });
 
+test("the name a knitter types is the name the Chart is read under", () => {
+  const named = view(SEPARATED, { ...COARSE, names: { "0,2": "Moss" } });
+  assert.equal(entryLabel(named, 2), "Moss");
+  assert.equal(entryLabel(named, 0), "Colour A"); // the ones they left alone keep their letter
+  // and it wins over whatever the parse put there, because it is their word
+  assert.equal(entryLabel(view(CHART, { ...UNREAD, names: { "0,2": "Bracken" } }), 2), "Bracken");
+});
+
+test("clearing a Colorway name brings the positional letter back", () => {
+  assert.equal(entryLabel(view(SEPARATED, { ...COARSE, names: { "0,2": "" } }), 2), "Colour C");
+});
+
+test("a name is the name of an entry of one Separation, and never of another's", () => {
+  // entry 2 at three colours is a different colour from entry 2 at four
+  const names = { "0,2": "Moss" };
+  assert.equal(entryLabel(view(SEPARATED, { ...FINE, names }), 2), "Colour C");
+  assert.equal(entryLabel(view(SEPARATED, { ...COARSE, names }), 2), "Moss"); // and back again
+});
+
 test("a Repaint made at one Separation is still there after switching, both ways", () => {
   // Stored at the finest Separation, because an index into a Palette that is
   // about to change cannot outlive the change.

@@ -2,7 +2,7 @@
 
 **Blocked by:** None.
 
-**Status:** ready-for-agent
+**Status:** done
 
 **What to build:** the knitter typing their own name over `Colour A`.
 
@@ -30,11 +30,11 @@ No validation. Two entries may both be called `M` — it is their notation, both
 swatches are on screen, and a modal on a phone is worse than a duplicate letter.
 An empty input means no name, and the letter comes back.
 
-- [ ] A knitter can type a name for any Palette entry of the Separation on screen
-- [ ] The name appears on Readout chips, on swatch tooltips and in `aria-label`s
-- [ ] Clearing the input restores the positional letter
-- [ ] Duplicate names are accepted without complaint
-- [ ] Names persist with the Chart and survive reopen
-- [ ] Switching Separation shows that Separation's names, and switching back shows the first set again
-- [ ] Naming is Review only — the Knit chip Palette is unchanged
-- [ ] Tests cover: a named entry's label, a cleared name falling back to the letter, names surviving a Separation round trip, and a name never leaking onto an entry of another Separation
+- [x] A knitter can type a name for any Palette entry of the Separation on screen
+- [x] The name appears on Readout chips, on swatch tooltips and in `aria-label`s
+- [x] Clearing the input restores the positional letter
+- [x] Duplicate names are accepted without complaint
+- [x] Names persist with the Chart and survive reopen
+- [x] Switching Separation shows that Separation's names, and switching back shows the first set again
+- [x] Naming is Review only — the Knit chip Palette is unchanged
+- [x] Tests cover: a named entry's label, a cleared name falling back to the letter, names surviving a Separation round trip, and a name never leaking onto an entry of another Separation
