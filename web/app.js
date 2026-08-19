@@ -87,6 +87,7 @@ const marker = document.getElementById("marker");
 const band = document.getElementById("band");
 const rowLabel = document.getElementById("row-label");
 const readout = document.getElementById("readout");
+const undo = document.getElementById("undo");
 const next = document.getElementById("next");
 const previous = document.getElementById("previous");
 const flip = document.getElementById("flip");
@@ -116,6 +117,10 @@ let reading = { construction: FLAT, start: RIGHT_TO_LEFT, flips: {} };
 let picked = null; // the Palette entry armed for Repaint in Review; null when none is
 let painting = null; // the pointer, Row and first Cell of the paint drag in progress
 let openChip = null; // the Run whose chip has the Palette open, in Knit
+// The Overlay as it stood before each chip Repaint of this session, newest last.
+// In memory only: the record is rewritten on every Row advance, and a history
+// the knitter cannot see has no business riding along on that write.
+let repaints = [];
 let chosen = null; // the image being parsed from — a chosen file, or a stored one for a Re-parse
 let chartName = null; // what the next parse will be kept under
 let imageUrl = null; // that image, drawn on the crop step and compared against in Review
@@ -262,6 +267,7 @@ function keptView({ separation, trimmed, overlay, names }) {
 function show(parsed) {
   chart = parsed;
   chosenView = keptView({});
+  repaints = [];
   openId = null; // nothing is written back until this parse has a record of its own
   selected = 1;
   reading = chosenReading({});
@@ -466,6 +472,7 @@ async function openChart(id) {
   openId = id;
   chart = kept.chart;
   chosenView = keptView(kept);
+  repaints = []; // another Chart's Repaints are not this one's to take back
   selected = openingRow(kept, chosenView);
   reading = kept.reading;
   constructionChoice.value = reading.construction;
@@ -606,6 +613,9 @@ function adopt(wanted) {
   if (picked !== null && picked >= next.palette.length) picked = null;
   const resized = rowCount(next) !== rowCount(shown) || colCount(next) !== colCount(shown);
   chosenView = wanted;
+  // A Separation or a Blank edge changes what a Palette index means, so an
+  // Overlay from before it would repaint Cells to a colour nobody picked.
+  repaints = [];
   say(error, null);
   redraw(); // before the frame: the window is cut to the size of the Chart being read
   frameTheImage();
@@ -807,6 +817,7 @@ function drawRow() {
   showOpenChip();
   previous.disabled = selected === 1;
   next.disabled = selected === rows;
+  undo.disabled = !repaints.length;
   persist();
 }
 
@@ -869,9 +880,19 @@ function showOpenChip() {
  */
 function paintRun(entry) {
   const { at, count } = openChip;
-  chosenView = repaint(chart, chosenView, { row: selected, from: at, to: at + count - 1 }, entry);
+  const painted = repaint(chart, chosenView, { row: selected, from: at, to: at + count - 1 }, entry);
+  repaints.push(chosenView.overlay); // `repaint` leaves this one whole, so keeping it is enough
+  chosenView = painted;
   redraw();
 }
+
+// Take back the last chip Repaint. The Row the knitter is on is left alone: a
+// mistake spotted a Row late is ordinary, and the Repaint is still theirs to
+// undo from wherever they have got to.
+undo.addEventListener("click", () => {
+  chosenView = { ...chosenView, overlay: repaints.pop() };
+  redraw(); // and `drawRow` writes the Chart back, as it does for a Repaint
+});
 
 /**
  * Every view of the Cells, after a decision about the Chart has changed. The

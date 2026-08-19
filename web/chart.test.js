@@ -318,6 +318,13 @@ test("a Repaint stacks onto the ones before it rather than replacing them", () =
   assert.deepEqual(cellsOfRow(painted, 3), [2, 2, 2, 2, 2, 1]);
 });
 
+test("the Overlay a Repaint was given is left as it was, so Undo can keep it", () => {
+  const first = repaint(CHART, UNREAD, { row: 1, from: 0, to: 0 }, 2);
+  const before = structuredClone(first.overlay);
+  repaint(CHART, first, { row: 3, from: 5, to: 5 }, 1);
+  assert.deepEqual(first.overlay, before);
+});
+
 test("Repaints survive the round trip through the device", () => {
   // The view state is what the library keeps, so it has to be storable as it is.
   const painted = repaint(CHART, UNREAD, { row: 2, from: 1, to: 2 }, 2);

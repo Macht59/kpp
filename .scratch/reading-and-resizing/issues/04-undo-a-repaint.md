@@ -2,7 +2,7 @@
 
 **Blocked by:** None.
 
-**Status:** ready-for-agent
+**Status:** done
 
 **What to build:** a way back from a Repaint made while knitting.
 
@@ -31,11 +31,11 @@ Separation chooser is Review-only by design (`web/app.js:561`).
 **Not cleared when the Selected Row moves.** Spotting a mistake one Row late is
 ordinary, and a knitter who has advanced should still be able to take it back.
 
-- [ ] An Undo button sits beside the Readout in Knit
-- [ ] It is disabled when there is nothing to undo
-- [ ] Undoing restores the Cells exactly as they were before the last chip Repaint
-- [ ] Undoing repeatedly walks back through the whole session's chip Repaints
-- [ ] The stack empties on reload
-- [ ] The stack empties when the Separation changes or the Blank edges are toggled
-- [ ] The stack survives moving the Selected Row
-- [ ] An undone Repaint is written back to the device like any other change
+- [x] An Undo button sits beside the Readout in Knit
+- [x] It is disabled when there is nothing to undo
+- [x] Undoing restores the Cells exactly as they were before the last chip Repaint
+- [x] Undoing repeatedly walks back through the whole session's chip Repaints
+- [x] The stack empties on reload
+- [x] The stack empties when the Separation changes or the Blank edges are toggled
+- [x] The stack survives moving the Selected Row
+- [x] An undone Repaint is written back to the device like any other change
