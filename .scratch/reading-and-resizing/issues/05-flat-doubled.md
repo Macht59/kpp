@@ -3,7 +3,7 @@
 **Blocked by:** None. Conflicts with 06 — both rewrite parts of `drawRow`, so
 take them in sequence rather than in parallel.
 
-**Status:** ready-for-agent
+**Status:** done
 
 **What to build:** a third **Construction**, for patterns worked out following
 the Chart and back repeating the previous row off the work.
@@ -53,14 +53,14 @@ The Construction is already persisted per Chart in `reading` (`web/app.js:354`),
 so the new value rides along with no storage change. A record holding one of the
 two old values keeps behaving exactly as it does today.
 
-- [ ] `Flat, doubled` is a third option on the Construction control
-- [ ] Under it, Reading direction is the same for every Row
-- [ ] Flip still overrides one Row's direction under it
-- [ ] `#row-label` reads `Rows 5 and 6 of 40` for Chart Row 3 of a 20-Row Chart
-- [ ] Two Readouts are shown, the second the first reversed, each with its own arrow bar and heading
-- [ ] A chip tap in either Readout repaints the same Cells and both lists update
-- [ ] One colour band and one marker
-- [ ] `rowCount`, Previous/Next and overview tapping are unchanged
-- [ ] The other two Constructions behave exactly as before — one Readout, one Row number, alternation intact for Flat
-- [ ] The choice persists with the Chart
-- [ ] Tests cover: `readingDirection` under the new Construction with and without a Flip, the Worked-row label arithmetic at Row 1, a middle Row and the last Row, and the second Readout being the first reversed
+- [x] `Flat, doubled` is a third option on the Construction control
+- [x] Under it, Reading direction is the same for every Row
+- [x] Flip still overrides one Row's direction under it
+- [x] `#row-label` reads `Rows 5 and 6 of 40` for Chart Row 3 of a 20-Row Chart
+- [x] Two Readouts are shown, the second the first reversed, each with its own arrow bar and heading
+- [x] A chip tap in either Readout repaints the same Cells and both lists update
+- [x] One colour band and one marker
+- [x] `rowCount`, Previous/Next and overview tapping are unchanged
+- [x] The other two Constructions behave exactly as before — one Readout, one Row number, alternation intact for Flat
+- [x] The choice persists with the Chart
+- [x] Tests cover: `readingDirection` under the new Construction with and without a Flip, the Worked-row label arithmetic at Row 1, a middle Row and the last Row, and the second Readout being the first reversed

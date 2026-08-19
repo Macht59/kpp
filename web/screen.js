@@ -123,3 +123,13 @@ export function screenFor(mode, hasChart) {
  * never does.
  */
 export const readoutFlow = (tops) => tops.slice(1).map((top, before) => (top === tops[before] ? "→" : "↵"));
+
+/**
+ * What the Selected Row is called: the Worked rows it stands for, out of the
+ * Worked rows in the whole Chart, and the stitches in it. Under flat doubled
+ * that is two Worked rows for one Chart Row, so the knitter counting rows off
+ * their needles and the app counting Rows up the Chart agree.
+ */
+export const rowWords = (worked, total, stitches) =>
+  `${worked.length === 1 ? `Row ${worked[0]}` : `Rows ${worked[0]} and ${worked[1]}`}` +
+  ` of ${total} — ${stitches} stitches`;

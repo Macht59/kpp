@@ -32,6 +32,7 @@
   input[type=file] { display: none; }
   img, canvas { display: block; max-width: 100%; margin: 0 auto; }
   h2 { font-size: 1rem; margin: 0; }
+  h3 { font-size: 1rem; margin: 0; }
 
   /* Three stacked full-width bands. Both canvases hold one pixel per Cell and
      are stretched by CSS, so 8 and 112 columns both land full width. */
@@ -45,8 +46,9 @@
     min-height: 3px; /* a Row of a 150-Row chart is under a pixel of the overview */
     outline: 2px solid #c0392b; background: #c0392b40;
   }
-  #readout { display: flex; flex-wrap: wrap; gap: 0.5rem; list-style: none; margin: 0; padding: 0; }
-  #readout .chip {
+  .worked { display: flex; flex-direction: column; gap: 0.6rem; }
+  .readout { display: flex; flex-wrap: wrap; gap: 0.5rem; list-style: none; margin: 0; padding: 0; }
+  .readout .chip {
     display: flex; align-items: center; gap: 0.5rem; width: auto;
     min-height: 44px; padding: 0 0.7rem; /* 44 px: tappable, not merely readable */
     border: 1px solid currentColor; border-radius: 0.5rem;
@@ -54,7 +56,7 @@
   }
   /* Fixed width, so swapping `→` for `↵` can never move the wrap that
      decided which of the two it is. */
-  #readout .sep { display: flex; align-items: center; justify-content: center; width: 1rem; opacity: 0.7; }
+  .readout .sep { display: flex; align-items: center; justify-content: center; width: 1rem; opacity: 0.7; }
   .swatch { width: 28px; height: 28px; border: 1px solid currentColor; border-radius: 0.25rem; }
   /* Two pickers, one primitive: the Palette bar arms a Repaint in Review, and
      the same buttons under a tapped Run chip repaint it in Knit. */
@@ -62,14 +64,14 @@
   [aria-pressed=true], [aria-expanded=true] { outline: 3px solid #c0392b; outline-offset: 2px; }
   /* Knitting a Row backwards is the mistake this bar exists to prevent, so it
      says the direction in an arrow and in words, right under the Row it describes. */
-  #direction {
+  .direction {
     display: flex; align-items: center; gap: 0.6rem;
     margin: 0; padding: 0.4rem 0.7rem;
     font-size: 1.15rem; font-weight: 700;
     border: 2px solid currentColor; border-radius: 0.5rem;
   }
-  #direction.left-to-right { flex-direction: row-reverse; } /* the arrow leads, whichever way it points */
-  #arrow { font-size: 1.6rem; line-height: 1; }
+  .direction.left-to-right { flex-direction: row-reverse; } /* the arrow leads, whichever way it points */
+  .arrow { font-size: 1.6rem; line-height: 1; }
   .setting { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
   .setting select { font: inherit; padding: 0.5rem; flex: 1; min-width: 0; }
   /* Review: whatever the pan and pinch have done to it, the Chart is one
@@ -231,9 +233,23 @@
       <div id="marker"></div>
     </div>
     <canvas id="band"></canvas>
-    <p id="direction"><span id="arrow"></span><span id="direction-words"></span></p>
     <h2 id="row-label"></h2>
-    <ul id="readout"></ul>
+    <!-- One block per Worked row. Worked flat or in the round a Row is worked
+         once, so the second block is hidden; worked flat and doubled it is the
+         first reversed — the same stitches knitted back off the work — and both
+         are live repaint handles, because they stand for the same Cells. One
+         colour band and one marker above them either way: the marker marks a
+         Chart Row, and there is exactly one of those. -->
+    <div class="worked">
+      <p class="direction"><span class="arrow"></span><span class="direction-words"></span></p>
+      <h3 class="worked-row" hidden></h3>
+      <ul class="readout"></ul>
+    </div>
+    <div class="worked" hidden>
+      <p class="direction"><span class="arrow"></span><span class="direction-words"></span></p>
+      <h3 class="worked-row" hidden></h3>
+      <ul class="readout"></ul>
+    </div>
     <!-- A tapped Run chip opens the Palette here: the correction a knitter makes
          is the one they are looking straight at. -->
     <ul id="chip-palette" hidden></ul>
@@ -252,6 +268,7 @@
       <select id="construction">
         <option value="flat">Flat — the work is turned every row</option>
         <option value="in the round">In the round — never turned</option>
+        <option value="flat doubled">Flat, doubled — each row is worked twice, out and back</option>
       </select>
     </label>
     <label class="setting">Row 1 reads

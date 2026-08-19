@@ -6,6 +6,7 @@ const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 export const FLAT = "flat";
 export const IN_THE_ROUND = "in the round";
+export const FLAT_DOUBLED = "flat doubled";
 export const RIGHT_TO_LEFT = "right-to-left";
 export const LEFT_TO_RIGHT = "left-to-right";
 
@@ -15,13 +16,27 @@ export const opposite = (direction) =>
 /**
  * Which way a Row is read, from the Chart's Construction, its starting
  * direction, and the Rows the knitter has Flipped. Flat turns the work every
- * Row so the direction alternates; in the round never turns so it holds. A Flip
- * wins over both — that is how a knitter recovers when the alternation has
- * slipped. Derived from the Row number alone, so retreating to a Row reads the
- * same way as arriving at it forwards.
+ * Row so the direction alternates; in the round never turns so it holds. Flat
+ * doubled turns the work too, but the way back is knitted off the previous row
+ * rather than off the Chart — so the Chart is only ever read on the way out and
+ * the direction holds, as it does in the round. A Flip wins over all three —
+ * that is how a knitter recovers when the alternation has slipped. Derived from
+ * the Row number alone, so retreating to a Row reads the same way as arriving at
+ * it forwards.
  */
 export function readingDirection({ construction, start, flips }, row) {
   return flips[row] ?? (construction === FLAT && (row - 1) % 2 === 1 ? opposite(start) : start);
+}
+
+/**
+ * The Worked rows one Chart Row stands for. Worked once under flat and in the
+ * round, so a Row is its own number; under flat doubled every Row is worked
+ * twice, out off the Chart and back off the work, so Row *n* is Worked rows
+ * `2n-1` and `2n` — and the Chart's last Row names how many Worked rows the
+ * whole Chart is.
+ */
+export function workedRows({ construction }, row) {
+  return construction === FLAT_DOUBLED ? [2 * row - 1, 2 * row] : [row];
 }
 
 /**

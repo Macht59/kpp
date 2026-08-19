@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 
 import {
   FLAT,
+  FLAT_DOUBLED,
   IN_THE_ROUND,
   LEFT_TO_RIGHT,
   RIGHT_TO_LEFT,
@@ -20,6 +21,7 @@ import {
   runsOfRow,
   separations,
   view,
+  workedRows,
 } from "./chart.js";
 
 // Small enough to read: three Rows, the bottom one alternating, the middle one
@@ -198,6 +200,46 @@ test("under flat the direction alternates as the knitter advances", () => {
 test("in the round the direction is the same on every Row", () => {
   const round = { construction: IN_THE_ROUND, start: RIGHT_TO_LEFT, flips: {} };
   for (const row of [1, 2, 3, 150]) assert.equal(readingDirection(round, row), RIGHT_TO_LEFT);
+});
+
+test("flat doubled reads the Chart on the way out only, so the direction holds", () => {
+  // The work is turned as it is under flat, but the way back is knitted off the
+  // previous row rather than off the Chart — so the Chart is only ever read one
+  // way, as it is in the round.
+  const doubled = { construction: FLAT_DOUBLED, start: RIGHT_TO_LEFT, flips: {} };
+  for (const row of [1, 2, 3, 150]) assert.equal(readingDirection(doubled, row), RIGHT_TO_LEFT);
+});
+
+test("a Flip still overrides one Row under flat doubled", () => {
+  const doubled = { construction: FLAT_DOUBLED, start: RIGHT_TO_LEFT, flips: { 2: LEFT_TO_RIGHT } };
+  assert.equal(readingDirection(doubled, 2), LEFT_TO_RIGHT);
+  assert.equal(readingDirection(doubled, 3), RIGHT_TO_LEFT);
+});
+
+test("a Row is one Worked row under the Constructions worked once", () => {
+  for (const construction of [FLAT, IN_THE_ROUND]) {
+    assert.deepEqual(workedRows({ construction }, 1), [1]);
+    assert.deepEqual(workedRows({ construction }, 20), [20]);
+  }
+});
+
+test("under flat doubled a Row is the two Worked rows out and back", () => {
+  const doubled = { construction: FLAT_DOUBLED };
+  assert.deepEqual(workedRows(doubled, 1), [1, 2]);
+  assert.deepEqual(workedRows(doubled, 3), [5, 6]);
+  // and the last Row of a 20-Row Chart is the fortieth Worked row, which is
+  // where the total in the label comes from
+  assert.deepEqual(workedRows(doubled, 20), [39, 40]);
+});
+
+test("the way back is the way out reversed, over the very same Cells", () => {
+  // What the second Readout is built from: the same Runs under the opposite
+  // Reading direction, each still carrying the Cells it stands for.
+  const row = rowOf([0, 0, 1, 2, 2, 2]);
+  const out = runsOfRow(row, 1, RIGHT_TO_LEFT);
+  const back = runsOfRow(row, 1, LEFT_TO_RIGHT);
+  assert.deepEqual(back, [...out].reverse());
+  assert.deepEqual(back.map((run) => run.at), [...out].reverse().map((run) => run.at));
 });
 
 test("a Flipped Row wins over the Construction, and only for that Row", () => {

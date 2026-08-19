@@ -19,6 +19,7 @@ import {
   rowNumber,
   runsOfRow,
   view,
+  workedRows,
 } from "./chart.js";
 import { corners, grabbedAnchor, rectFrom, wholePixels } from "./crop.js";
 import { askToKeep, forget, keep, remember, restore, spaceLeft, stored } from "./library.js";
@@ -31,6 +32,7 @@ import {
   readoutFlow,
   rowAfterAdopting,
   rowOnOpening,
+  rowWords,
   screenFor,
   separationChoices,
   updateOffer,
@@ -86,16 +88,22 @@ const overview = document.getElementById("overview");
 const marker = document.getElementById("marker");
 const band = document.getElementById("band");
 const rowLabel = document.getElementById("row-label");
-const readout = document.getElementById("readout");
+// One block per Worked row — see the Knit section of index.html. The second is
+// only ever drawn under a Construction that works a Row twice.
+const workedBlocks = [...knit.querySelectorAll(".worked")].map((block) => ({
+  block,
+  bar: block.querySelector(".direction"),
+  arrow: block.querySelector(".arrow"),
+  words: block.querySelector(".direction-words"),
+  label: block.querySelector(".worked-row"),
+  readout: block.querySelector(".readout"),
+}));
 const undo = document.getElementById("undo");
 const next = document.getElementById("next");
 const previous = document.getElementById("previous");
 const flip = document.getElementById("flip");
 const constructionChoice = document.getElementById("construction");
 const startChoice = document.getElementById("start");
-const directionBar = document.getElementById("direction");
-const arrow = document.getElementById("arrow");
-const directionWords = document.getElementById("direction-words");
 const library = document.getElementById("library");
 const keptList = document.getElementById("kept");
 const quota = document.getElementById("quota");
@@ -792,7 +800,7 @@ function showImage(wanted) {
   applyView();
 }
 
-/** The Selected Row: where it sits, its colour bands, and its Readout. */
+/** The Selected Row: where it sits, its colour band, and its Readout or two. */
 function drawRow() {
   const rows = rowCount(shown);
   const direction = readingDirection(reading, selected);
@@ -803,22 +811,40 @@ function drawRow() {
   marker.style.height = `${100 / rows}%`;
   drawCells(band, [cellsOfRow(shown, selected)]);
 
-  const rightToLeft = direction === RIGHT_TO_LEFT;
-  directionBar.className = direction;
-  arrow.textContent = rightToLeft ? "←" : "→";
-  directionWords.textContent = `Reading ${rightToLeft ? "right to left" : "left to right"}${
-    reading.flips[selected] ? " — flipped by hand" : ""
-  }`;
-
-  rowLabel.textContent = `Row ${selected} of ${rows} — ${stitches} stitches`;
+  // One band and one marker for however many times the Row is worked: the
+  // marker marks a Chart Row and there is exactly one of those, and a mirrored
+  // second band says nothing the reversed chips have not said already.
+  const worked = workedRows(reading, selected);
+  rowLabel.textContent = rowWords(worked, workedRows(reading, rows).at(-1), stitches);
   openChip = null; // a Row that has moved under the picker is not the Run it was opened for
-  readout.replaceChildren(...runs.map(chip).flatMap((item, at) => (at ? [separator(), item] : [item])));
+  workedBlocks.forEach((block, at) => {
+    block.block.hidden = at >= worked.length;
+    if (block.block.hidden) return block.readout.replaceChildren();
+    // The way back is the way out reversed, under the opposite direction: the
+    // same stitches worked back off the work rather than read off the Chart.
+    drawWorked(block, at ? opposite(direction) : direction, at ? [...runs].reverse() : runs);
+    // Named only when there are two of them to tell apart — one Worked row is
+    // the Row, and the heading above already says which.
+    block.label.hidden = worked.length === 1;
+    block.label.textContent = `Row ${worked[at]}`;
+  });
   showFlow();
   showOpenChip();
   previous.disabled = selected === 1;
   next.disabled = selected === rows;
   undo.disabled = !repaints.length;
   persist();
+}
+
+/** One Worked row: which way it is read, and the Runs in that order. */
+function drawWorked({ bar, arrow, words, readout }, direction, runs) {
+  const rightToLeft = direction === RIGHT_TO_LEFT;
+  bar.className = `direction ${direction}`;
+  arrow.textContent = rightToLeft ? "←" : "→";
+  words.textContent = `Reading ${rightToLeft ? "right to left" : "left to right"}${
+    reading.flips[selected] ? " — flipped by hand" : ""
+  }`;
+  readout.replaceChildren(...runs.map(chip).flatMap((item, at) => (at ? [separator(), item] : [item])));
 }
 
 /** One Run: a swatch and a Cell count, big enough to hit — and tapping it Repaints it. */
@@ -858,20 +884,28 @@ function separator() {
  * the layout rather than worked out from the Runs.
  */
 function showFlow() {
-  const chips = [...readout.querySelectorAll("li:not(.sep)")];
-  const glyphs = readoutFlow(chips.map((item) => item.offsetTop));
-  readout.querySelectorAll("li.sep").forEach((item, between) => (item.textContent = glyphs[between]));
+  for (const { readout } of workedBlocks) {
+    const chips = [...readout.querySelectorAll("li:not(.sep)")];
+    const glyphs = readoutFlow(chips.map((item) => item.offsetTop));
+    readout.querySelectorAll("li.sep").forEach((item, between) => (item.textContent = glyphs[between]));
+  }
 }
 
 // A narrower window wraps the Readout somewhere else, and the separators are
 // only right for the layout they were measured against.
-new ResizeObserver(showFlow).observe(readout);
+for (const { readout } of workedBlocks) new ResizeObserver(showFlow).observe(readout);
 
-/** The Palette below the Readout, open for the tapped chip or shut. */
+/**
+ * The Palette below the Readouts, open for the tapped chip or shut. Marked by
+ * the Cells the chip stands for rather than by the chip, so a Run tapped in
+ * either Readout of a doubled Row opens the picker in both — they are one Row
+ * worked twice, and repainting it repaints the same Cells.
+ */
 function showOpenChip() {
   chipPalette.hidden = !openChip;
-  for (const button of readout.querySelectorAll("button"))
-    button.setAttribute("aria-expanded", String(Number(button.dataset.at) === openChip?.at));
+  for (const { readout } of workedBlocks)
+    for (const button of readout.querySelectorAll("button"))
+      button.setAttribute("aria-expanded", String(Number(button.dataset.at) === openChip?.at));
 }
 
 /**

@@ -12,6 +12,7 @@ import {
   readoutFlow,
   rowAfterAdopting,
   rowOnOpening,
+  rowWords,
   screenFor,
   separationChoices,
   updateOffer,
@@ -183,4 +184,14 @@ test("a chip that starts a new line is reached by a wrap mark", () => {
 test("a Readout of one Run has no separator at all", () => {
   assert.deepEqual(readoutFlow([0]), []);
   assert.deepEqual(readoutFlow([]), []);
+});
+
+test("a Row worked once is named alone, with its stitches", () => {
+  assert.equal(rowWords([3], 20, 42), "Row 3 of 20 — 42 stitches");
+});
+
+test("a Row worked out and back is named as both Worked rows", () => {
+  assert.equal(rowWords([5, 6], 40, 42), "Rows 5 and 6 of 40 — 42 stitches");
+  assert.equal(rowWords([1, 2], 40, 8), "Rows 1 and 2 of 40 — 8 stitches");
+  assert.equal(rowWords([39, 40], 40, 8), "Rows 39 and 40 of 40 — 8 stitches");
 });
