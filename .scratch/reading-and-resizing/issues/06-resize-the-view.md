@@ -2,7 +2,7 @@
 
 **Blocked by:** None. Conflicts with 05 — see that ticket.
 
-**Status:** ready-for-agent
+**Status:** done
 
 **What to build:** nothing the knitter can see yet. This is the logic half of
 Resize; ticket 07 puts a control on it. Split because the pipeline change is
@@ -41,12 +41,12 @@ nearest-neighbour replicates it without special-casing.
 `blankEdgesOf` and `countsOf` cache against `chart.cells` and are measured from
 the parse, so they are unaffected — the resample happens downstream of both.
 
-- [ ] `view()` accepts `scale: {rows, cols}` and returns a Chart of that size
-- [ ] Rows and Columns resize independently
-- [ ] The resample is nearest-neighbour — no colour appears that is not a Palette entry
-- [ ] The resample runs after the Blank-edge trim, so the size asked for is the size returned
-- [ ] Non-stitch Cells survive a resize in both directions
-- [ ] A round trip down and back up returns the original Cells exactly, Repaints included
-- [ ] No `scale`, or a `scale` equal to the current size, leaves the view byte-identical to today's
-- [ ] A `scale` of zero or negative Rows or Columns is refused, not clamped
-- [ ] Tests cover: doubling, halving, non-square scaling in each direction, the round trip, Non-stitch survival, Repaint survival across a round trip, and the interaction with `trimmed: true`
+- [x] `view()` accepts `scale: {rows, cols}` and returns a Chart of that size
+- [x] Rows and Columns resize independently
+- [x] The resample is nearest-neighbour — no colour appears that is not a Palette entry
+- [x] The resample runs after the Blank-edge trim, so the size asked for is the size returned
+- [x] Non-stitch Cells survive a resize in both directions
+- [x] A round trip down and back up returns the original Cells exactly, Repaints included
+- [x] No `scale`, or a `scale` equal to the current size, leaves the view byte-identical to today's
+- [x] A `scale` of zero or negative Rows or Columns is refused, not clamped
+- [x] Tests cover: doubling, halving, non-square scaling in each direction, the round trip, Non-stitch survival, Repaint survival across a round trip, and the interaction with `trimmed: true`

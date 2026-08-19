@@ -122,6 +122,26 @@ const NEARLY = {
   default_separation: 1,
 };
 
+/**
+ * Four Rows by four Columns in blocks of four, so a halving and a doubling both
+ * land whole and a mis-sampled Cell shows up as the wrong block. No white in
+ * it, so Blank edges never enter a Resize test that is not about them.
+ */
+const GAUGE = {
+  schema_version: 1,
+  dimensions: { rows: 4, cols: 4 },
+  palette: [
+    { rgb: [20, 20, 20], name: null },
+    { rgb: [178, 96, 72], name: "Rust" },
+  ],
+  cells: [
+    [0, 0, 1, 1],
+    [0, 0, 1, 1],
+    [1, 1, 0, 0],
+    [1, 1, 0, 0],
+  ],
+};
+
 const withCells = (chart, cells) => ({
   ...chart,
   dimensions: { rows: cells.length, cols: cells[0].length },
@@ -704,4 +724,116 @@ test("only a crop near the coin flip is doubtful, and a Chart without the signal
   assert.equal(cropIsDoubtful(scored(0.26)), false); // a corpus crop that parsed to the right size
   assert.equal(cropIsDoubtful(scored(0.92)), false);
   assert.equal(cropIsDoubtful(CHART), false); // `confidence` is optional in the contract
+});
+
+const scaled = (chart, state, scale) => view(chart, { ...state, scale });
+
+test("a Chart read at twice its size repeats every Cell, and invents none", () => {
+  assert.deepEqual(scaled(GAUGE, UNREAD, { rows: 8, cols: 8 }).cells, [
+    [0, 0, 0, 0, 1, 1, 1, 1],
+    [0, 0, 0, 0, 1, 1, 1, 1],
+    [0, 0, 0, 0, 1, 1, 1, 1],
+    [0, 0, 0, 0, 1, 1, 1, 1],
+    [1, 1, 1, 1, 0, 0, 0, 0],
+    [1, 1, 1, 1, 0, 0, 0, 0],
+    [1, 1, 1, 1, 0, 0, 0, 0],
+    [1, 1, 1, 1, 0, 0, 0, 0],
+  ]);
+});
+
+test("a Chart read at half its size keeps whole Cells, never a blend of two", () => {
+  assert.deepEqual(scaled(GAUGE, UNREAD, { rows: 2, cols: 2 }).cells, [
+    [0, 1],
+    [1, 0],
+  ]);
+});
+
+test("Rows and Columns resize independently", () => {
+  assert.deepEqual(scaled(GAUGE, UNREAD, { rows: 2, cols: 8 }).cells, [
+    [0, 0, 0, 0, 1, 1, 1, 1],
+    [1, 1, 1, 1, 0, 0, 0, 0],
+  ]);
+  assert.deepEqual(scaled(GAUGE, UNREAD, { rows: 8, cols: 2 }).cells, [
+    [0, 1],
+    [0, 1],
+    [0, 1],
+    [0, 1],
+    [1, 0],
+    [1, 0],
+    [1, 0],
+    [1, 0],
+  ]);
+});
+
+test("the size asked for is the size returned, whatever it divides into", () => {
+  const shown = scaled(CHART, UNREAD, { rows: 7, cols: 4 });
+  assert.equal(rowCount(shown), 7);
+  assert.equal(colCount(shown), 4);
+});
+
+test("the resample invents no colour that is not a Palette entry", () => {
+  const shown = scaled(CHART, UNREAD, { rows: 7, cols: 4 });
+  const parsed = new Set(CHART.cells.flat());
+  for (const row of shown.cells) for (const cell of row) assert.ok(parsed.has(cell));
+});
+
+test("Non-stitch resamples like any other Cell, in both directions", () => {
+  // it carries -1 and nearest-neighbour replicates it with no special case
+  assert.deepEqual(scaled(CHART, UNREAD, { rows: 6, cols: 12 }).cells[2], [
+    0, 0, -1, -1, -1, -1, 1, 1, 1, 1, 1, 1,
+  ]);
+  assert.deepEqual(scaled(CHART, UNREAD, { rows: 1, cols: 3 }).cells, [[-1, 1, 1]]);
+});
+
+test("the resample runs after the Blank-edge trim, so the size asked for is of the Chart the knitter sees", () => {
+  // Two Rows and two Columns of pattern inside a Blank edge on all four sides:
+  // four Rows of the *trimmed* Chart are four of pattern, not four counting the
+  // white space hidden from the knitter.
+  const framed = withCells(MARGINED, [
+    [0, 0, 0, 0],
+    [0, 1, 1, 0],
+    [0, 1, 1, 0],
+    [0, 0, 0, 0],
+  ]);
+  const shown = scaled(framed, TRIMMED, { rows: 4, cols: 4 });
+  assert.deepEqual(shown.cells, [
+    [1, 1, 1, 1],
+    [1, 1, 1, 1],
+    [1, 1, 1, 1],
+    [1, 1, 1, 1],
+  ]);
+  // and the Blank edges are still reported, measured from the parse as ever
+  assert.deepEqual(shown.blank, { top: 1, bottom: 1, left: 1, right: 1 });
+});
+
+test("a resize down and back up returns the Chart Cell for Cell, Repaints included", () => {
+  // The reason Resize is derived rather than baked into a new Chart: the parse
+  // is always the thing being sampled, so nothing is lost on the way down.
+  const painted = repaint(GAUGE, UNREAD, { row: 1, from: 0, to: 0 }, 0);
+  const whole = view(GAUGE, painted);
+  assert.deepEqual(whole.cells[3], [0, 1, 0, 0]); // Row 1, one Cell corrected
+  // The knitter tries half, and the halving samples straight past the corrected
+  // Cell — a single-Cell Repaint has a coin-flip chance of surviving one.
+  assert.deepEqual(scaled(GAUGE, painted, { rows: 2, cols: 2 }).cells, [
+    [0, 1],
+    [1, 0],
+  ]);
+  // They dislike it and go back, and their correction is there — because the
+  // Repaint is applied to the parse and the parse was never touched.
+  assert.deepEqual(scaled(GAUGE, painted, { rows: 4, cols: 4 }), whole);
+});
+
+test("no scale, and a scale of the size already read, leave the view exactly as it was", () => {
+  assert.deepEqual(scaled(CHART, UNREAD, { rows: 3, cols: 6 }), view(CHART, UNREAD));
+  assert.deepEqual(scaled(MARGINED, TRIMMED, { rows: 2, cols: 3 }), view(MARGINED, TRIMMED));
+});
+
+test("a scale of zero, negative or fractional Rows or Columns is refused, not clamped", () => {
+  const ask = (scale) => () => scaled(GAUGE, UNREAD, scale);
+  assert.throws(ask({ rows: 0, cols: 4 }), /Rows and Columns/);
+  assert.throws(ask({ rows: 4, cols: 0 }), /Rows and Columns/);
+  assert.throws(ask({ rows: -4, cols: 4 }), /Rows and Columns/);
+  assert.throws(ask({ rows: 4, cols: -4 }), /Rows and Columns/);
+  assert.throws(ask({ rows: 2.5, cols: 4 }), /Rows and Columns/);
+  assert.throws(ask({ rows: 4 }), /Rows and Columns/); // half a size is no size
 });

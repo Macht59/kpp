@@ -45,3 +45,20 @@ measures through the view, so a resized Chart states its resized size.
 - [ ] Resizing back to the parsed size returns the Chart exactly, Repaints included
 - [ ] Selecting returns to Row 1 after a Resize
 - [ ] A `ponytail:` comment marks the missing size cap and names the failure it allows
+
+## Comments
+
+**Found while building 06 — a Repaint on a resized Chart lands on the wrong
+Cell.** ADR-0007 lists what reads the resized view unchanged — `measured`,
+`runsOfRow`, the library's size line, `frameTheImage` — and `repaint` is not on
+it, but it takes the same view. It maps the knitter's finger back to the parse
+through `offset(shown)` and `rowIndex(shown, row)` (`web/chart.js`), neither of
+which knows about the resample: on a Chart read at twice its size, Row 8 maps to
+array Row 0 and Column 7 to a Column the parse does not have, so the overlay key
+written is either the wrong Cell or one nothing ever reads.
+
+Harmless while Resize is only a `view()` stage, because nothing sets `scale`.
+The moment this ticket puts the control on screen a knitter can Resize and then
+Repaint, so it wants either a fix here — invert the nearest-neighbour mapping in
+`repaint`, the way `offset` already inverts the trim — or its own ticket taken
+before this one ships.

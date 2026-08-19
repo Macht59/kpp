@@ -289,6 +289,30 @@ function countsOf(chart) {
 }
 
 /**
+ * The Cells at a different number of Rows and Columns, sampled nearest-neighbour
+ * — each Cell of the answer is whichever Cell of the source its centre lands in,
+ * copied whole. No interpolation: an averaged Cell would be a colour in no
+ * Palette entry and in no knitter's yarn basket. Sampling by centres rather than
+ * by edges makes an unchanged size the identity, so a Resize back to the size
+ * already read returns the Chart rather than a near miss of it. A centre landing
+ * exactly between two Cells takes the later one, which is arbitrary but the same
+ * every time.
+ *
+ * A size that is not a whole number of Rows and Columns, one or more, is refused
+ * rather than clamped: a knitter who asks for none of a Chart has mistyped, and
+ * handing them the smallest Chart there is would hide that.
+ */
+function resampled(cells, { rows, cols }) {
+  if (![rows, cols].every((size) => Number.isInteger(size) && size > 0))
+    throw new Error(`no Chart is ${rows} by ${cols} — Rows and Columns are whole numbers, 1 or more`);
+  const nearest = (at, outOf, source) => Math.floor(((at + 0.5) * source) / outOf);
+  return Array.from({ length: rows }, (_, row) => {
+    const source = cells[nearest(row, rows, cells.length)];
+    return Array.from({ length: cols }, (_, col) => source[nearest(col, cols, source.length)]);
+  });
+}
+
+/**
  * The Chart the knitter is reading, derived from the stored one and the
  * decisions they have made about it: which Separation to read it at, whether
  * Blank edges are hidden, and the Cells they have Repainted. It comes back in
@@ -307,7 +331,7 @@ function countsOf(chart) {
  * being read, and `blank` comes back either way so the knitter can be told what
  * is being kept from them.
  */
-export function view(chart, { separation, trimmed = false, overlay = {}, names = {} } = {}) {
+export function view(chart, { separation, trimmed = false, overlay = {}, names = {}, scale } = {}) {
   const { index, merge } = separationOf(chart, separation);
   const palette = named(paletteOf(chart, merge, countsOf(chart)), names, index);
   const read = (cell) => (cell === NON_STITCH ? NON_STITCH : merge[cell]);
@@ -319,15 +343,21 @@ export function view(chart, { separation, trimmed = false, overlay = {}, names =
   // chosen one — a chooser marking their choice rather than the answer on screen
   // would mark nothing at all on a Chart they have never touched.
   const shown = { ...chart, palette, blank, trimmed, separation: index };
-  if (!trimmed) return { ...shown, cells: painted };
-  const cells = painted
-    .slice(blank.top, painted.length - blank.bottom)
-    .map((row) => row.slice(blank.left, row.length - blank.right));
-  // A crop that caught nothing but the page around the chart: refused with the
-  // way out, because an empty Chart on screen tells the knitter nothing.
-  if (!cells.length || !cells[0].length)
-    throw new Error("This chart is blank — crop closer to the pattern and parse it again.");
-  return { ...shown, cells };
+  let cells = painted;
+  if (trimmed) {
+    cells = painted
+      .slice(blank.top, painted.length - blank.bottom)
+      .map((row) => row.slice(blank.left, row.length - blank.right));
+    // A crop that caught nothing but the page around the chart: refused with the
+    // way out, because an empty Chart on screen tells the knitter nothing.
+    if (!cells.length || !cells[0].length)
+      throw new Error("This chart is blank — crop closer to the pattern and parse it again.");
+  }
+  // Last, so "twenty Rows" is twenty of the Chart the knitter can see rather
+  // than twenty counting the Blank edges hidden from them — and so the Repaints
+  // above are applied at the resolution they were made at, which is what makes a
+  // Resize down and back up a Cell-for-Cell return.
+  return { ...shown, cells: scale ? resampled(cells, scale) : cells };
 }
 
 /** Where a view's Cell sits in the stored Chart: past the Blank edges it hides. */
