@@ -27,10 +27,12 @@ import {
   KNIT,
   REVIEW,
   blankWords,
+  keptInProportion,
   measured,
   paletteWords,
   readoutFlow,
   rowAfterAdopting,
+  rowAfterResizing,
   rowOnOpening,
   rowWords,
   screenFor,
@@ -66,6 +68,9 @@ const size = document.getElementById("size");
 const trim = document.getElementById("trim");
 const trimWords = document.getElementById("trim-words");
 const showBlanks = document.getElementById("show-blanks");
+const resizeRows = document.getElementById("resize-rows");
+const resizeCols = document.getElementById("resize-cols");
+const keepProportions = document.getElementById("keep-proportions");
 const separationChoice = document.getElementById("separation");
 const separationList = document.getElementById("separations");
 const paletteSize = document.getElementById("palette-size");
@@ -265,10 +270,11 @@ async function parse(image, { x, y, w, h }) {
  * existed simply has none of them, and lands on the same defaults a fresh parse
  * does.
  */
-function keptView({ separation, trimmed, overlay, names }) {
+function keptView({ separation, trimmed, overlay, names, scale }) {
   // No Separation of their own means the parser's default, which `view` knows
-  // and a stored record does not — a v1 Chart has no default to record.
-  return { separation, trimmed: trimmed ?? true, overlay: overlay ?? {}, names: names ?? {} };
+  // and a stored record does not — a v1 Chart has no default to record. No
+  // `scale` means the size the Chart was parsed at, which `view` knows too.
+  return { separation, trimmed: trimmed ?? true, overlay: overlay ?? {}, names: names ?? {}, scale };
 }
 
 /** A freshly parsed Chart is unverified, so it opens in Review, at its bottom Row. */
@@ -564,6 +570,7 @@ function drawFacts() {
   colorwayList.replaceChildren(...shown.palette.map(nameable));
   doubt.hidden = !cropIsDoubtful(chart);
   drawTrim();
+  drawResize();
   drawSeparations();
 }
 
@@ -616,7 +623,14 @@ function adopt(wanted) {
   } catch (failure) {
     return say(error, failure.message);
   }
-  selected = rowAfterAdopting(selected, shown, next);
+  // A Resize is the one decision that discards the Row the knitter was on: the
+  // Chart has been sampled to another number of Rows, so theirs stands for a
+  // different part of the pattern at the size they have asked for.
+  selected = rowAfterResizing(
+    rowAfterAdopting(selected, shown, next),
+    chosenView.scale,
+    wanted.scale,
+  );
   // An entry of a Palette that is about to be shorter is armed at nothing.
   if (picked !== null && picked >= next.palette.length) picked = null;
   const resized = rowCount(next) !== rowCount(shown) || colCount(next) !== colCount(shown);
@@ -633,6 +647,53 @@ function adopt(wanted) {
   // is the opposite of instant.
   if (resized) resetView();
 }
+
+/**
+ * The size the Chart is read at, in the two boxes a knitter types another one
+ * into. Filled from the Chart on screen rather than from their last answer, so
+ * the fields always say what they have — a Chart nobody has resized states the
+ * size it was parsed at, which is where a Resize starts from.
+ */
+function drawResize() {
+  resizeRows.value = rowCount(shown);
+  resizeCols.value = colCount(shown);
+}
+
+/** The Chart's size before any Resize — what `keep proportions` keeps against. */
+function unscaledSize() {
+  const parsed = view(chart, { ...chosenView, scale: undefined });
+  return { rows: rowCount(parsed), cols: colCount(parsed) };
+}
+
+/**
+ * Read this Chart at another number of Rows or Columns. No parse and no
+ * connection: `adopt` derives it from the Chart already on the device, and says
+ * so itself when the number asked for is not a size.
+ *
+ * `ponytail:` no upper bound. `drawCells` fills one rect per Cell and a paint
+ * drag re-derives the view on every pointer move, so a large enough number will
+ * make the app stop responding, with no way out but closing the app. Shipped
+ * uncapped at the customer's request (ADR-0007) — the ceiling to fit is a real
+ * device rather than a guess.
+ */
+function resize(field) {
+  // An empty box is on the way to a number rather than a size: the fields say
+  // what is on screen again, and the Chart is left alone.
+  if (!field.value.trim()) return drawResize();
+  const typed = field === resizeRows ? { rows: field.valueAsNumber } : { cols: field.valueAsNumber };
+  // Kept in proportion to the Chart as it was parsed, not to the last Resize:
+  // otherwise every rounding of the field they are not typing in compounds into
+  // the next one, and the shape drifts as they try numbers.
+  const scale = keepProportions.checked
+    ? keptInProportion(unscaledSize(), typed)
+    : { rows: rowCount(shown), cols: colCount(shown), ...typed };
+  adopt({ ...chosenView, scale });
+}
+
+// On change rather than on every keystroke: "140" typed a digit at a time is a
+// 1-Row Chart and then a 14-Row one, each of them derived and drawn.
+resizeRows.addEventListener("change", () => resize(resizeRows));
+resizeCols.addEventListener("change", () => resize(resizeCols));
 
 /** What the crop caught beyond the pattern, and the way to have it back. */
 function drawTrim() {
@@ -778,9 +839,11 @@ function frameTheImage() {
   // The window frames the part of the crop the Chart is read from, which with
   // Blank edges hidden is inside the rectangle the knitter drew — otherwise the
   // comparison would put the image's white margin against the Chart's Row 1.
-  const { top, bottom, left, right } = shown.trimmed ? shown.blank : NOTHING_HIDDEN;
-  const cellWide = w / (colCount(shown) + left + right);
-  const cellTall = h / (rowCount(shown) + top + bottom);
+  const { top, left, right } = shown.trimmed ? shown.blank : NOTHING_HIDDEN;
+  // A Cell of the crop is a Cell of the *parse*: the view may be read at another
+  // size, and the white margin to step over is measured in the parse's Cells.
+  const cellWide = w / chart.cells[0].length;
+  const cellTall = h / chart.cells.length;
   const framed = { x: x + left * cellWide, y: y + top * cellTall, w: w - (left + right) * cellWide };
   const zoom = chart.source.image_width / framed.w; // the frame, whatever its size, fills the window
   cropped.style.aspectRatio = `${colCount(shown)} / ${rowCount(shown)}`;

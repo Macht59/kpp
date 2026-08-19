@@ -1,6 +1,6 @@
 # Reading and resizing — spec
 
-Status: ready-for-agent
+Status: done — all seven tickets built
 Feature: reading-and-resizing
 Collapsed from: a `/grill-with-docs` session, four rounds, frontier empty.
 
@@ -115,6 +115,13 @@ keep-proportions checkbox, in Review only, beside the Separation chooser.
 Two things were chosen against my recommendation and are built as asked:
 Selecting returns to Row 1 after a Resize, and there is no upper size bound.
 Both are recorded in the ADR's consequences.
+
+Two things read the view and turned out *not* to be resize-blind, against what
+the ADR's "needs no change" list said, and were fixed in 07: `repaint`, which
+maps the knitter's finger back to the parse and now inverts the resample the way
+it already inverted the trim; and `frameTheImage`, which measured a Cell of the
+crop off the view rather than off the parse and mis-framed the image comparison
+on a resized Chart with Blank edges hidden.
 
 ### The Selected Row
 

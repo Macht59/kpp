@@ -30,6 +30,14 @@ in no knitter's yarn basket.
 
 ## Consequences
 
+Anything that maps a knitter's finger back onto the parse has to invert the
+resample as well as the trim. `repaint` does: it takes the co-ordinates of the
+Chart on screen, so on a resized one it would otherwise write the overlay
+against a Cell nothing reads. `frameTheImage` measures the crop in the parse's
+Cells for the same reason. Both are downstream of `view()` and neither was on
+the list below when this was written — reading the resized view unchanged and
+mapping *back* through it are different things.
+
 `view()` gains a stage and loses its current ordering. Blank edges are trimmed
 *before* the resample, so "20 rows" means twenty of the Chart the knitter can
 see rather than twenty including four blank ones. Everything downstream —

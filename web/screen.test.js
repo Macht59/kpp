@@ -10,7 +10,9 @@ import {
   measured,
   paletteWords,
   readoutFlow,
+  keptInProportion,
   rowAfterAdopting,
+  rowAfterResizing,
   rowOnOpening,
   rowWords,
   screenFor,
@@ -194,4 +196,19 @@ test("a Row worked out and back is named as both Worked rows", () => {
   assert.equal(rowWords([5, 6], 40, 42), "Rows 5 and 6 of 40 — 42 stitches");
   assert.equal(rowWords([1, 2], 40, 8), "Rows 1 and 2 of 40 — 8 stitches");
   assert.equal(rowWords([39, 40], 40, 8), "Rows 39 and 40 of 40 — 8 stitches");
+});
+
+test("a Resize puts the knitter back on Row 1, and a decision that is not one leaves them", () => {
+  const size = { rows: 40, cols: 30 };
+  assert.equal(rowAfterResizing(12, undefined, size), 1);
+  assert.equal(rowAfterResizing(12, size, { rows: 40, cols: 20 }), 1);
+  assert.equal(rowAfterResizing(12, size, { ...size }), 12); // the size they are already reading at
+  assert.equal(rowAfterResizing(12, undefined, undefined), 12); // a Separation, or the Blank edges
+});
+
+test("keeping proportions drives the field the knitter did not type in", () => {
+  const base = { rows: 100, cols: 20 };
+  assert.deepEqual(keptInProportion(base, { rows: 50 }), { rows: 50, cols: 10 });
+  assert.deepEqual(keptInProportion(base, { cols: 10 }), { rows: 50, cols: 10 });
+  assert.deepEqual(keptInProportion(base, { rows: 1 }), { rows: 1, cols: 1 }); // never none of a Chart
 });

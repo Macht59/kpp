@@ -837,3 +837,34 @@ test("a scale of zero, negative or fractional Rows or Columns is refused, not cl
   assert.throws(ask({ rows: 2.5, cols: 4 }), /Rows and Columns/);
   assert.throws(ask({ rows: 4 }), /Rows and Columns/); // half a size is no size
 });
+
+test("a Repaint on a Chart read larger lands on the Cell the knitter pointed at", () => {
+  // The finger is on the Chart the knitter can see, which the resample sits
+  // between — so it is mapped back through the resample, the way it is mapped
+  // back through the Blank edges the view hides.
+  const big = { ...UNREAD, scale: { rows: 8, cols: 8 } };
+  const painted = repaint(GAUGE, big, { row: 5, from: 6, to: 7 }, 0);
+  assert.deepEqual(painted.overlay, { "1,3": 0 }); // one Cell of the parse, not Row 3 Column 7
+  assert.deepEqual(cellsOfRow(view(GAUGE, painted), 5), [0, 0, 0, 0, 1, 1, 0, 0]);
+});
+
+test("a Repaint on a Chart read smaller lands on the Cell the resample took", () => {
+  const half = { ...UNREAD, scale: { rows: 2, cols: 2 } };
+  const painted = repaint(GAUGE, half, { row: 1, from: 0, to: 0 }, 0);
+  assert.deepEqual(cellsOfRow(view(GAUGE, painted), 1), [0, 0]);
+  // and back at the parsed size it is the one Cell the halving was sampling
+  assert.deepEqual(view(GAUGE, { ...painted, scale: { rows: 4, cols: 4 } }).cells[3], [1, 0, 0, 0]);
+});
+
+test("a Repaint on a resized Chart is mapped back through the Blank edges too", () => {
+  const framed = withCells(MARGINED, [
+    [0, 0, 0, 0],
+    [0, 1, 1, 0],
+    [0, 1, 1, 0],
+    [0, 0, 0, 0],
+  ]);
+  const state = { ...TRIMMED, scale: { rows: 4, cols: 4 } };
+  const painted = repaint(framed, state, { row: 4, from: 0, to: 0 }, 0);
+  assert.deepEqual(painted.overlay, { "1,1": 0 }); // inside the white margin the view hides
+  assert.deepEqual(view(framed, painted).cells[0], [0, 0, 1, 1]);
+});

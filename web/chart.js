@@ -289,6 +289,14 @@ function countsOf(chart) {
 }
 
 /**
+ * Which Cell of a line of `source` Cells the Cell at `at` of a line of `outOf`
+ * of them is sampled from — the resample, in one direction and one step. Read
+ * forwards it fills a resized Chart; read on a Cell the knitter has pointed at
+ * it says which Cell of the source their finger was over.
+ */
+const nearest = (at, outOf, source) => Math.floor(((at + 0.5) * source) / outOf);
+
+/**
  * The Cells at a different number of Rows and Columns, sampled nearest-neighbour
  * — each Cell of the answer is whichever Cell of the source its centre lands in,
  * copied whole. No interpolation: an averaged Cell would be a colour in no
@@ -305,7 +313,6 @@ function countsOf(chart) {
 function resampled(cells, { rows, cols }) {
   if (![rows, cols].every((size) => Number.isInteger(size) && size > 0))
     throw new Error(`no Chart is ${rows} by ${cols} — Rows and Columns are whole numbers, 1 or more`);
-  const nearest = (at, outOf, source) => Math.floor(((at + 0.5) * source) / outOf);
   return Array.from({ length: rows }, (_, row) => {
     const source = cells[nearest(row, rows, cells.length)];
     return Array.from({ length: cols }, (_, col) => source[nearest(col, cols, source.length)]);
@@ -364,6 +371,19 @@ export function view(chart, { separation, trimmed = false, overlay = {}, names =
 const offset = (shown) => (shown.trimmed ? shown.blank : { top: 0, left: 0 });
 
 /**
+ * The size the view was resampled from: the parse, less the Blank edges hidden
+ * from the knitter. The Chart a Repaint is mapped back onto — unresized, that is
+ * the view's own size and the mapping is the identity.
+ */
+function beforeResample(chart, shown) {
+  const hidden = shown.trimmed ? shown.blank : { top: 0, bottom: 0, left: 0, right: 0 };
+  return {
+    rows: chart.cells.length - hidden.top - hidden.bottom,
+    cols: chart.cells[0].length - hidden.left - hidden.right,
+  };
+}
+
+/**
  * A Row's span of Cells — `from` to `to` inclusive, in either order, because a
  * knitter drags both ways — set to a Palette entry or to Non-stitch. One
  * primitive at two selection sizes: a single Cell is the span `from === to`.
@@ -411,12 +431,17 @@ export function repaint(chart, state, { row, from, to }, entry, shown = view(cha
   if (entry !== NON_STITCH && finest < 0)
     throw new Error(`no Palette entry ${entry} in this Chart`);
 
-  // Back through the Blank edges the view hides, so a Repaint is stored against
-  // the Cell of the parse the knitter's finger was actually over.
+  // Back through the resample and then the Blank edges the view hides, so a
+  // Repaint is stored against the Cell of the parse the knitter's finger was
+  // actually over. A Chart read larger has several of its Cells standing for one
+  // of the parse's, so painting any of them paints all of them — the parse has
+  // no finer Cell to record their correction against.
   const { top, left } = offset(shown);
-  const index = rowIndex(shown, row) + top;
+  const source = beforeResample(chart, shown);
+  const index = nearest(rowIndex(shown, row), rowCount(shown), source.rows) + top;
   const overlay = { ...state.overlay };
   const stored = entry === NON_STITCH ? NON_STITCH : finest;
-  for (let col = first; col <= last; col += 1) overlay[`${index},${col + left}`] = stored;
+  for (let col = first; col <= last; col += 1)
+    overlay[`${index},${nearest(col, colCount(shown), source.cols) + left}`] = stored;
   return { ...state, overlay };
 }

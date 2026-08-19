@@ -2,7 +2,7 @@
 
 **Blocked by:** 06 — Resize as a stage of the Chart view.
 
-**Status:** ready-for-agent
+**Status:** done
 
 **What to build:** the control the knitter reaches for when a chart was drawn
 for someone else's gauge.
@@ -37,14 +37,14 @@ both are recorded in [ADR-0007](../../../docs/adr/0007-resize-is-a-derived-view.
 The library's size line needs no change: `sized` (`web/app.js:427`) already
 measures through the view, so a resized Chart states its resized size.
 
-- [ ] Rows and Columns fields sit in Review, showing the current size
-- [ ] Typing a number resizes the Chart on screen without a parse or a connection
-- [ ] `keep proportions` drives the other field; unchecked, the two are independent
-- [ ] The size persists with the Chart and survives reopen
-- [ ] The library's size line states the resized size
-- [ ] Resizing back to the parsed size returns the Chart exactly, Repaints included
-- [ ] Selecting returns to Row 1 after a Resize
-- [ ] A `ponytail:` comment marks the missing size cap and names the failure it allows
+- [x] Rows and Columns fields sit in Review, showing the current size
+- [x] Typing a number resizes the Chart on screen without a parse or a connection
+- [x] `keep proportions` drives the other field; unchecked, the two are independent
+- [x] The size persists with the Chart and survives reopen
+- [x] The library's size line states the resized size
+- [x] Resizing back to the parsed size returns the Chart exactly, Repaints included
+- [x] Selecting returns to Row 1 after a Resize
+- [x] A `ponytail:` comment marks the missing size cap and names the failure it allows
 
 ## Comments
 
@@ -62,3 +62,17 @@ The moment this ticket puts the control on screen a knitter can Resize and then
 Repaint, so it wants either a fix here — invert the nearest-neighbour mapping in
 `repaint`, the way `offset` already inverts the trim — or its own ticket taken
 before this one ships.
+
+**Built.** The control sits in Review under the Blank-edge toggle: two number
+boxes filled from the Chart on screen, a `keep proportions` checkbox that drives
+the other box from the parsed size, and a `change` listener that goes through
+`adopt`. `scale` joins the other decisions in `keptView`, in the record `persist`
+writes, and in the fields `stored` hands the library list, so a resized Chart
+states its resized size on the shelf and opens at that size.
+
+The Repaint bug found while building 06 was fixed here rather than taken as its
+own ticket: `repaint` now maps the knitter's Row and Columns back through the
+resample — `nearest`, lifted out of `resampled` and read backwards — before it
+maps them back through the Blank edges. A Chart read larger has several Cells
+standing for one of the parse's, so painting any of them paints all of them;
+there is no finer Cell to record the correction against.

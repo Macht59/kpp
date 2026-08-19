@@ -93,6 +93,13 @@
   #palette, #chip-palette, #separations { display: flex; flex-wrap: wrap; gap: 0.4rem; list-style: none; margin: 0; padding: 0; }
   #separation { display: flex; flex-direction: column; gap: 0.4rem; }
   #separation-hint { margin: 0; opacity: 0.8; }
+  #resize { display: flex; flex-direction: column; gap: 0.4rem; }
+  #resize-hint { margin: 0; opacity: 0.8; }
+  #resize-fields { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+  /* Wide enough for three digits and the spinner beside them, tall enough to hit. */
+  #resize-fields input[type=number] { font: inherit; min-height: 44px; width: 6rem; padding: 0 0.5rem; }
+  #proportions-label { display: flex; align-items: center; gap: 0.4rem; min-height: 44px; }
+  #keep-proportions { width: 24px; height: 24px; }
   /* Counts, not colours: the knitter chooses by comparing against the yarns on
      the table, so each is wide enough to read and no wider. */
   #separations button { width: auto; min-height: 44px; padding: 0 0.9rem; font-variant-numeric: tabular-nums; }
@@ -192,6 +199,22 @@
          app says why, and a pattern that really does have a white edge row needs
          the white space back in one tap. -->
     <p id="trim" hidden><span id="trim-words"></span> <button id="show-blanks"></button></p>
+    <!-- A chart drawn for someone else's gauge, read at the knitter's. Numbers
+         rather than a percentage: a knitter resizing for gauge is thinking "I
+         need 140 stitches wide". Review only, like the chooser below it — a
+         knitter mid row must not have the chart change size under them. -->
+    <div id="resize">
+      <p id="resize-hint">Knitting to another gauge? Read this chart at:</p>
+      <div id="resize-fields">
+        <label for="resize-rows">Rows</label>
+        <input id="resize-rows" type="number" min="1" step="1" inputmode="numeric">
+        <label for="resize-cols">Columns</label>
+        <input id="resize-cols" type="number" min="1" step="1" inputmode="numeric">
+        <label id="proportions-label" for="keep-proportions">
+          <input id="keep-proportions" type="checkbox"> Keep proportions
+        </label>
+      </div>
+    </div>
     <p id="palette-size"></p>
     <!-- Two shades of one colour can come back as one entry, and the count
          above is the only place a knitter sees it happen. Every answer the

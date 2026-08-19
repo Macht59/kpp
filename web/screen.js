@@ -81,6 +81,30 @@ export const rowAfterAdopting = (selected, shown, next) =>
   Math.max(selected + hiddenBelow(shown) - hiddenBelow(next), 1);
 
 /**
+ * The Row the knitter stands on after a Resize: Row 1. The Chart they were
+ * reading has been sampled to another number of Rows, so the Row they were on
+ * stands for a different part of the pattern at the new size — and Resize is a
+ * Review control, where a Chart is settled before it is knitted, so the case is
+ * rare. It is the one place in the app that discards the Selected Row on
+ * purpose; ADR-0007 records that as a choice rather than an oversight.
+ */
+export const rowAfterResizing = (selected, was, now) =>
+  was?.rows === now?.rows && was?.cols === now?.cols ? selected : 1;
+
+/**
+ * The size a Chart is read at when one of the two fields is typed into and the
+ * other is kept in proportion to the Chart as it was parsed. Rounded to whole
+ * Rows and Columns, and never to none of a Chart: a knitter who narrows a wide
+ * pattern far enough would otherwise ask for zero Rows and be refused for it.
+ */
+export const keptInProportion = (base, { rows, cols }) => {
+  const other = (from, of_, per) => Math.max(Math.round((from * of_) / per), 1);
+  return rows === undefined
+    ? { rows: other(cols, base.rows, base.cols), cols }
+    : { rows, cols: other(rows, base.cols, base.rows) };
+};
+
+/**
  * The Row a kept Chart opens on. A record written before Blank edges were ever
  * hidden numbered its Row against the whole Chart, and opens hidden now — so
  * the Row the knitter stopped on has moved down by the blank Rows beneath it.
