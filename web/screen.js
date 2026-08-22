@@ -4,7 +4,7 @@
 // answers but write them into elements, so the rules are testable without a
 // browser and the drawing stays the part that is checked by eye.
 
-import { rowCount, colCount, separations } from "./chart.js";
+import { rowCount, colCount, entriesOf, separations } from "./chart.js";
 
 export const REVIEW = "review";
 export const KNIT = "knit";
@@ -43,10 +43,24 @@ export function blankWords({ blank, trimmed }) {
  * Marked from the Chart on screen rather than the knitter's stored choice: one
  * who has chosen nothing is still reading at the parser's default, and marking
  * their choice would mark nothing at all.
+ *
+ * The labels are the parse's own counts and nothing else, which is what
+ * switching to one of them gives — so they are the same list until the Chart is,
+ * and the list can be built once. What a Merge has done comes back beside them
+ * as `merged`, for the marked answer alone: the count on screen is fewer than
+ * the answer says, and the two would otherwise disagree with no explanation.
+ * Null when nothing is Merged away, which is most Charts.
  */
 export function separationChoices(chart, shown) {
-  const labels = separations(chart).map(({ colours }) => paletteWords(colours));
-  return { hidden: labels.length < 2, labels, marked: shown.separation };
+  const offered = separations(chart);
+  const reading = entriesOf(shown).length;
+  const labels = offered.map(({ colours }) => paletteWords(colours));
+  return {
+    hidden: labels.length < 2,
+    labels,
+    marked: shown.separation,
+    merged: reading < offered[shown.separation].colours ? reading : null,
+  };
 }
 
 /**

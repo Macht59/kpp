@@ -8,9 +8,11 @@ import {
   cellsOfRow,
   colCount,
   cropIsDoubtful,
+  entriesOf,
   entryLabel,
   entryLetter,
   isReadable,
+  mergeEntries,
   opposite,
   readingDirection,
   repaint,
@@ -77,6 +79,8 @@ const paletteSize = document.getElementById("palette-size");
 const paletteList = document.getElementById("palette");
 const paintHint = document.getElementById("paint-hint");
 const colorwayList = document.getElementById("colorway-list");
+const mergePalette = document.getElementById("merge-palette");
+const unmerge = document.getElementById("unmerge");
 const chipPalette = document.getElementById("chip-palette");
 const viewport = document.getElementById("viewport");
 const pannable = document.getElementById("pannable");
@@ -130,6 +134,12 @@ let reading = { construction: FLAT, start: RIGHT_TO_LEFT, flips: {} };
 let picked = null; // the Palette entry armed for Repaint in Review; null when none is
 let painting = null; // the pointer, Row and first Cell of the paint drag in progress
 let openChip = null; // the Run whose chip has the Palette open, in Knit
+// The Palette entry whose Merge picker is open in Review; null when it is shut.
+let openColorway = null;
+// The Merges as they stood before each one of this session, newest last. In
+// memory only, like the Repaints below and for the same reason — so a Merge is
+// permanent once the Chart has been closed and opened again.
+let mergings = [];
 // The Overlay as it stood before each chip Repaint of this session, newest last.
 // In memory only: the record is rewritten on every Row advance, and a history
 // the knitter cannot see has no business riding along on that write.
@@ -270,11 +280,18 @@ async function parse(image, { x, y, w, h }) {
  * existed simply has none of them, and lands on the same defaults a fresh parse
  * does.
  */
-function keptView({ separation, trimmed, overlay, names, scale }) {
+function keptView({ separation, trimmed, overlay, names, merges, scale }) {
   // No Separation of their own means the parser's default, which `view` knows
   // and a stored record does not — a v1 Chart has no default to record. No
   // `scale` means the size the Chart was parsed at, which `view` knows too.
-  return { separation, trimmed: trimmed ?? true, overlay: overlay ?? {}, names: names ?? {}, scale };
+  return {
+    separation,
+    trimmed: trimmed ?? true,
+    overlay: overlay ?? {},
+    names: names ?? {},
+    merges: merges ?? {},
+    scale,
+  };
 }
 
 /** A freshly parsed Chart is unverified, so it opens in Review, at its bottom Row. */
@@ -282,6 +299,8 @@ function show(parsed) {
   chart = parsed;
   chosenView = keptView({});
   repaints = [];
+  mergings = [];
+  openColorway = null;
   openId = null; // nothing is written back until this parse has a record of its own
   selected = 1;
   reading = chosenReading({});
@@ -487,6 +506,8 @@ async function openChart(id) {
   chart = kept.chart;
   chosenView = keptView(kept);
   repaints = []; // another Chart's Repaints are not this one's to take back
+  mergings = []; // nor its Merges, and a Merge is permanent once a Chart is reopened
+  openColorway = null;
   selected = openingRow(kept, chosenView);
   reading = kept.reading;
   constructionChoice.value = reading.construction;
@@ -562,12 +583,18 @@ function drawFacts() {
   // Stated from `cells` rather than from `dimensions`: the contract declares
   // both and they agree, but only one of them is the Chart that gets knitted.
   size.textContent = measured(shown);
-  paletteSize.textContent = paletteWords(shown.palette.length);
-  drawPalettes();
+  // The entries that are colours in their own right — `palette.length` counts
+  // the ones a Merge folded away as well, and they are not colours the knitter
+  // has.
+  const entries = entriesOf(shown);
+  paletteSize.textContent = paletteWords(entries.length);
   // Not from `drawPalettes`: rebuilding a box the knitter is typing in would
   // take the keyboard away mid-name, and a name is drawn from here only when
-  // the Palette itself is another one — another Chart, or another Separation.
-  colorwayList.replaceChildren(...shown.palette.map(nameable));
+  // the Palette itself is another one — another Chart, another Separation, or a
+  // Merge. Before the pickers, because the Merge picker marks the Colorway
+  // swatch it is open under and cannot mark one that is about to be replaced.
+  colorwayList.replaceChildren(...entries.map(({ colour, entry }) => nameable(colour, entry)));
+  drawPalettes();
   doubt.hidden = !cropIsDoubtful(chart);
   drawTrim();
   drawResize();
@@ -586,24 +613,32 @@ function drawFacts() {
  * Row must not have the instructions change under them.
  */
 function drawSeparations() {
-  const { hidden, labels, marked } = separationChoices(chart, shown);
+  const { hidden, labels, marked, merged } = separationChoices(chart, shown);
   separationChoice.hidden = hidden;
   const buttons = () => [...separationList.querySelectorAll("button")];
   // Built again only when the answers themselves changed, which means another
   // Chart. Replacing the button the knitter just tapped takes the focus off it,
   // and someone walking the list by keyboard or screen reader — comparing counts
   // is the whole point of it — would be dropped out of the list at every tap.
-  if (buttons().map((button) => button.textContent).join() !== labels.join())
+  // Compared against the answers rather than against what the buttons say: what
+  // a Merge has done rides on whichever answer is marked, so the words move from
+  // one button to another as the knitter switches while the answers stand still.
+  if (buttons().map((button) => button.dataset.answer).join() !== labels.join())
     separationList.replaceChildren(...labels.map(choosable));
-  for (const [at, button] of buttons().entries())
+  for (const [at, button] of buttons().entries()) {
+    button.textContent =
+      at === marked && merged !== null ? `${labels[at]} (${merged} merged)` : labels[at];
     button.setAttribute("aria-pressed", String(at === marked));
+  }
 }
 
 /** One answer: the colour count, tappable, marked when it is the one on screen. */
 function choosable(label, at) {
   const item = document.createElement("li");
   const button = document.createElement("button");
-  button.textContent = label;
+  // The answer it stands for, which is what the list is rebuilt against — the
+  // words on it also say what a Merge has done, and that is not the answer.
+  button.dataset.answer = label;
   button.addEventListener("click", () => adopt({ ...chosenView, separation: at }));
   item.append(button);
   return item;
@@ -634,12 +669,20 @@ function adopt(wanted) {
     chosenView.scale ?? size,
     wanted.scale ?? size,
   );
-  // An entry of a Palette that is about to be shorter is armed at nothing.
+  // An entry of a Palette that is about to be shorter is armed at nothing; one
+  // a Merge folds away at the Separation being switched to is armed at the
+  // colour it was Merged into.
   if (picked !== null && picked >= next.palette.length) picked = null;
+  if (picked !== null) picked = next.palette[picked].into ?? picked;
+  // A Palette the knitter has not seen yet is no place to have a Merge picker
+  // open: the two colours it was opened over are not the two on screen.
+  openColorway = null;
   const resized = rowCount(next) !== rowCount(shown) || colCount(next) !== colCount(shown);
   chosenView = wanted;
   // A Separation or a Blank edge changes what a Palette index means, so an
-  // Overlay from before it would repaint Cells to a colour nobody picked.
+  // Overlay from before it would repaint Cells to a colour nobody picked. The
+  // Merges are not touched: they are recorded at the finest Palette and outlive
+  // both, so the way back to before one has to outlive them too.
   repaints = [];
   say(error, null);
   redraw(); // before the frame: the window is cut to the size of the Chart being read
@@ -722,28 +765,110 @@ showBlanks.addEventListener("click", () =>
  * picker before the knitter gets there.
  */
 function drawPalettes() {
-  paletteList.replaceChildren(
-    ...shown.palette.map((colour, entry) => pickable(colour, entry, arm)),
-  );
+  const entries = entriesOf(shown);
+  paletteList.replaceChildren(...entries.map(({ colour, entry }) => pickable(colour, entry, arm)));
   chipPalette.replaceChildren(
-    ...shown.palette.map((colour, entry) => pickable(colour, entry, paintRun)),
+    ...entries.map(({ colour, entry }) => pickable(colour, entry, paintRun)),
   );
+  drawMerging(entries);
   showArmed();
 }
 
 /**
- * One Palette entry under the knitter's own word for it. The swatch is the
- * colour and nothing else here — the one above arms a Repaint, and two swatches
- * that do different things is better than one that does both by how long it is
- * held. Nothing is validated: two entries called `M` is their notation, and a
+ * The colours a Merge can be made with, open under the Colorway the knitter
+ * tapped or shut. Never the one it was opened from — a colour is not another
+ * yarn than itself — and never a Chart with one colour left, which has nothing
+ * to Merge with.
+ */
+function drawMerging(entries) {
+  unmerge.disabled = !mergings.length;
+  const others = openColorway === null ? [] : entries.filter(({ entry }) => entry !== openColorway);
+  // Emptied rather than merely hidden when there is nothing to Merge with: a
+  // strip of live buttons behind `hidden` is a Merge waiting to be made against
+  // whichever colour the picker was last shut over.
+  mergePalette.hidden = !others.length;
+  mergePalette.replaceChildren(
+    // Named for what tapping one does rather than for the colour it is: a strip
+    // of swatches called "Colour B" says nothing to anyone who cannot see it,
+    // and this is the one picker whose colours are both halves of the statement.
+    ...others.map(({ colour, entry }) =>
+      pickable(colour, entry, mergeWith, `Merge ${entryLabel(shown, openColorway)} with `),
+    ),
+  );
+  // Marked from the picker rather than from the tap, so a swatch is never left
+  // outlined as open over a strip that has nothing in it to show.
+  for (const swatch of colorwayList.querySelectorAll("button.swatch"))
+    swatch.setAttribute(
+      "aria-expanded",
+      String(!mergePalette.hidden && Number(swatch.dataset.entry) === openColorway),
+    );
+}
+
+/**
+ * Open the Merge picker under a Colorway, or shut it. Tapping the open one
+ * again shuts it, the way arming an armed entry disarms it — the way out of a
+ * picker is the control that opened it.
+ */
+function openMerge(entry) {
+  openColorway = openColorway === entry ? null : entry;
+  drawMerging(entriesOf(shown));
+}
+
+/**
+ * Two colours declared one yarn. Every Readout in the Chart is rewritten, which
+ * is why this is in Review and not in Knit, and the picker shuts behind it: the
+ * two colours it was opened over are one now, so it is a picker over a Palette
+ * that no longer exists.
+ */
+function mergeWith(entry) {
+  const merged = mergeEntries(chart, chosenView, openColorway, entry);
+  mergings.push(chosenView.merges); // `mergeEntries` leaves this one whole
+  takeUpMerge(merged);
+}
+
+// Take back the last Merge of this session. Its own stack, not the Repaints':
+// this one is reached from Review, and it outlives the Separation switches and
+// Resizes that clear those, because a Merge outlives them too.
+unmerge.addEventListener("click", () => takeUpMerge({ ...chosenView, merges: mergings.pop() }));
+
+/**
+ * A Merge, or the taking back of one. Not `adopt`: a Merge changes no Cell's
+ * position and no Blank edge, so the Row the knitter is on, their Repaints and
+ * the frame on the image all still stand — the Chart is the same Chart in fewer
+ * colours.
+ */
+function takeUpMerge(wanted) {
+  chosenView = wanted;
+  openColorway = null; // a picker over two colours that are now one is over nothing
+  redraw(); // `shown` is derived here, so the armed entry is checked after it
+  // The armed entry follows its colour rather than being dropped: a Merge that
+  // folds the slot it was armed at away leaves that colour on another slot, and
+  // disarming would be a decision the knitter did not make.
+  if (picked !== null) picked = shown.palette[picked].into ?? picked;
+  drawFacts();
+}
+
+/**
+ * One Palette entry under the knitter's own word for it, and the handle a Merge
+ * starts from: tapping the swatch opens the colours it can be declared one yarn
+ * with. Knit's chip gesture — tap the thing, a Palette opens, tap the
+ * destination — and it is free here, because the Palette above already spends
+ * its own tap on arming a Repaint.
+ *
+ * A name is not validated: two entries called `M` is their notation, and a
  * complaint about it on a phone is worse than the duplicate.
  */
 function nameable(colour, entry) {
   const item = document.createElement("li");
-  const swatch = document.createElement("span");
+  const swatch = document.createElement("button");
   const box = document.createElement("input");
   swatch.className = "swatch";
   swatch.style.background = rgb(colour.rgb);
+  swatch.dataset.entry = entry;
+  swatch.title = `Merge ${entryLabel(shown, entry)} with another colour`;
+  swatch.setAttribute("aria-label", swatch.title);
+  swatch.setAttribute("aria-controls", mergePalette.id);
+  swatch.addEventListener("click", () => openMerge(entry));
   box.type = "text";
   box.value = chosenView.names[`${shown.separation},${entry}`] ?? "";
   // The letter the entry answers to while it is unnamed, which is also what
@@ -776,14 +901,19 @@ function rename(entry, name) {
 
 /**
  * One Palette entry: the count of entries the eye catches rather than reads, and
- * the handle both Repaints hang off — armed in Review, tapped under a chip in Knit.
+ * the handle both Repaints hang off — armed in Review, tapped under a chip in
+ * Knit. `said` is what tapping it does, for the picker where the colour alone
+ * does not say it.
  */
-function pickable(colour, entry, choose) {
+function pickable(colour, entry, choose, said = "") {
   const item = document.createElement("li");
   const button = document.createElement("button");
   button.className = "swatch";
   button.style.background = rgb(colour.rgb);
-  button.title = entryLabel(shown, entry);
+  // The entry it stands for, not its place in the list: a Merge leaves the
+  // entries a knitter can see at their own indices with gaps between them.
+  button.dataset.entry = entry;
+  button.title = said + entryLabel(shown, entry);
   button.setAttribute("aria-label", button.title);
   button.addEventListener("click", () => choose(entry));
   item.append(button);
@@ -801,8 +931,8 @@ function arm(entry) {
 }
 
 function showArmed() {
-  for (const [index, button] of [...paletteList.querySelectorAll("button")].entries())
-    button.setAttribute("aria-pressed", String(index === picked));
+  for (const button of paletteList.querySelectorAll("button"))
+    button.setAttribute("aria-pressed", String(Number(button.dataset.entry) === picked));
   paintHint.textContent =
     picked === null
       ? "Tap a colour to correct cells with it. Drag with one finger to pan, two to zoom."

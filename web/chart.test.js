@@ -11,8 +11,10 @@ import {
   cellsOfRow,
   colCount,
   cropIsDoubtful,
+  entriesOf,
   entryLabel,
   isReadable,
+  mergeEntries,
   readingDirection,
   repaint,
   rowCount,
@@ -867,4 +869,190 @@ test("a Repaint on a resized Chart is mapped back through the Blank edges too", 
   const painted = repaint(framed, state, { row: 4, from: 0, to: 0 }, 0);
   assert.deepEqual(painted.overlay, { "1,1": 0 }); // inside the white margin the view hides
   assert.deepEqual(view(framed, painted).cells[0], [0, 0, 1, 1]);
+});
+
+/**
+ * The knitter's own Merge, on the shape it is for: five finest entries — a black
+ * and four yellows in two near pairs — and three Separations over them. At the
+ * middle one, which the parse defaults to, the yellows are the two entries the
+ * knitter can see and knows are one yarn. Row 1 is the yellows, in Cell counts
+ * that make the two pairs equal and each pair's first member its most-used.
+ */
+const YELLOWS = {
+  schema_version: 2,
+  dimensions: { rows: 2, cols: 6 },
+  palette: [
+    { rgb: [20, 20, 20], name: null }, // black
+    { rgb: [250, 240, 80], name: null }, // lemon
+    { rgb: [240, 230, 70], name: null }, // lemon-ish
+    { rgb: [230, 190, 60], name: null }, // butter
+    { rgb: [220, 180, 50], name: null }, // butter-ish
+  ],
+  cells: [
+    [0, 0, 0, 0, 0, 0],
+    [1, 1, 2, 3, 3, 4],
+  ],
+  separations: [
+    { colours: 2, merge: [0, 1, 1, 1, 1] }, // every yellow as one
+    { colours: 3, merge: [0, 1, 1, 2, 2] }, // the two yellows the knitter sees
+    { colours: 5, merge: [0, 1, 2, 3, 4] }, // the finest
+  ],
+  default_separation: 1,
+};
+
+/** The Separation the knitter is looking at, and the finer one they may switch to. */
+const SEEN = { trimmed: false, overlay: {} };
+const FINEST = { ...SEEN, separation: 2 };
+
+/** The two yellows declared one yarn, at the Separation they were seen at. */
+const oneYarn = mergeEntries(YELLOWS, SEEN, 1, 2);
+
+test("a view of a Chart nobody has Merged anything on is the view it always was", () => {
+  assert.deepEqual(view(YELLOWS, { ...SEEN, merges: {} }), view(YELLOWS, SEEN));
+  assert.deepEqual(view(SEPARATED, { ...COARSE, merges: {} }), view(SEPARATED, COARSE));
+});
+
+test("two entries Merged are one colour, on the slot the group mostly was", () => {
+  const shown = view(YELLOWS, oneYarn);
+  // The Palette keeps its length: renumbering would shift every entry after the
+  // Merged one, and a Colorway is keyed by entry.
+  assert.equal(shown.palette.length, 3);
+  assert.equal(shown.palette[2].into, 1); // read as the entry it was Merged into
+  assert.equal(shown.palette[0].into, undefined); // and the untouched ones are colours
+  assert.equal(shown.palette[1].into, undefined);
+  // Two colours on screen, which is the count a knitter holds against their yarns
+  assert.deepEqual(
+    entriesOf(shown).map(({ entry }) => entry),
+    [0, 1],
+  );
+});
+
+test("a Merged colour is every finest entry of the group averaged by Cell count", () => {
+  // the rule the parser's own merges already come through, applied to the
+  // knitter's: 250·2 + 240 + 230·2 + 220 over six Cells of yellow
+  assert.deepEqual(view(YELLOWS, oneYarn).palette[1].rgb, [237, 212, 67]);
+  // and the swallowed slot keeps the colour it held, for when the Merge is dropped
+  assert.deepEqual(view(YELLOWS, oneYarn).palette[2].rgb, [227, 187, 57]);
+});
+
+test("the two yellows are two Runs before the Merge and one after it", () => {
+  // the customer's request, expressed as a test: "3 yellow, 3 yellow" where the
+  // knitter will work six stitches of one yarn
+  assert.deepEqual(counted(runsOfRow(view(YELLOWS, SEEN), 1, LEFT_TO_RIGHT)), [
+    { entry: 1, count: 3 },
+    { entry: 2, count: 3 },
+  ]);
+  const merged = view(YELLOWS, oneYarn);
+  assert.deepEqual(counted(runsOfRow(merged, 1, LEFT_TO_RIGHT)), [{ entry: 1, count: 6 }]);
+  assert.deepEqual(counted(runsOfRow(merged, 1, RIGHT_TO_LEFT)), [{ entry: 1, count: 6 }]);
+});
+
+test("a Merge is in force at every Separation, and takes the shades inside it along", () => {
+  // Recorded at the finest Palette, because a claim about yarn does not stop
+  // being true when the colour count changes. The only way to say "these two
+  // entries are one" in finest terms is the union of the finest entries behind
+  // them — so at the finest Separation all four yellows are one colour, which is
+  // the knitter's statement read out to its end.
+  assert.deepEqual(oneYarn.merges, { 1: 1, 2: 1, 3: 1, 4: 1 });
+  const finest = view(YELLOWS, { ...oneYarn, separation: 2 });
+  assert.equal(finest.palette.length, 5);
+  assert.deepEqual(
+    entriesOf(finest).map(({ entry }) => entry),
+    [0, 1],
+  );
+  assert.deepEqual(counted(runsOfRow(finest, 1, LEFT_TO_RIGHT)), [{ entry: 1, count: 6 }]);
+  // and at the coarsest, where the parser had already merged them, it says nothing new
+  assert.deepEqual(view(YELLOWS, { ...oneYarn, separation: 0 }).palette.length, 2);
+});
+
+test("a third colour Merged into a group joins it rather than starting another", () => {
+  const two = mergeEntries(YELLOWS, FINEST, 1, 2);
+  const three = mergeEntries(YELLOWS, { ...FINEST, ...two }, 1, 3);
+  assert.deepEqual(
+    entriesOf(view(YELLOWS, { ...FINEST, ...three })).map(({ entry }) => entry),
+    [0, 1, 4], // the group, and the one yellow left out of it
+  );
+  // reached from the other end — Merging the third onto a member of the group
+  const from = mergeEntries(YELLOWS, { ...FINEST, ...two }, 3, 2);
+  assert.deepEqual(from.merges, three.merges);
+});
+
+test("Merging is idempotent, and the same in either order", () => {
+  assert.deepEqual(mergeEntries(YELLOWS, oneYarn, 1, 2).merges, oneYarn.merges);
+  assert.deepEqual(mergeEntries(YELLOWS, SEEN, 2, 1).merges, oneYarn.merges);
+  // a colour Merged with itself is no statement at all
+  assert.equal(mergeEntries(YELLOWS, SEEN, 1, 1), SEEN);
+});
+
+test("Merging something that is not a colour of this Chart is refused", () => {
+  assert.throws(() => mergeEntries(YELLOWS, SEEN, 1, 9), /no Palette entry 9/);
+  assert.throws(() => mergeEntries(YELLOWS, SEEN, 9, 1), /no Palette entry 9/);
+  // Non-stitch is yarn's absence rather than a colour, so it is not a Merge
+  assert.throws(() => mergeEntries(YELLOWS, SEEN, 1, -1), /no Palette entry -1/);
+});
+
+test("the Colorway on the surviving slot is the name the Merged colour is read under", () => {
+  const names = { "1,1": "Mustard", "1,2": "Ochre" };
+  const merged = { ...oneYarn, names };
+  assert.equal(entryLabel(view(YELLOWS, merged), 1), "Mustard");
+  // Ochre is not lost, it is on a slot nothing reads — and it is back the moment
+  // the Merge is, which is what makes taking one back cheap
+  assert.equal(entryLabel(view(YELLOWS, { ...SEEN, names }), 2), "Ochre");
+});
+
+test("a Merge never moves a hidden line or a Row number", () => {
+  // Two off-whites Merged average to a colour past the near-white gate, and an
+  // edge Row vanishing under the knitter would renumber every Row above it for a
+  // reason they never asked for. Blank edges are measured from the Separation's
+  // own colours, before the Merge — the rule a Repaint already follows.
+  const fine = { trimmed: true, overlay: {}, separation: 1 };
+  const before = view(NEARLY, fine);
+  const after = view(NEARLY, mergeEntries(NEARLY, fine, 0, 1));
+  assert.equal(rowCount(before), 3);
+  assert.equal(rowCount(after), 3);
+  assert.deepEqual(after.blank, before.blank);
+  // and the Separation that merges them for the parser's own reasons still hides it
+  assert.equal(rowCount(view(NEARLY, { ...fine, separation: 0 })), 2);
+});
+
+test("a Repaint to a Merged colour records the shade the group mostly was", () => {
+  // The swatch the knitter tapped is the group averaged by Cell count, so the
+  // most-used member of it is the colour it mostly was.
+  const painted = repaint(YELLOWS, oneYarn, { row: 2, from: 0, to: 0 }, 1);
+  assert.deepEqual(painted.overlay, { "0,0": 1 }); // the lemon, two Cells of the group's six
+  assert.deepEqual(cellsOfRow(view(YELLOWS, painted), 2), [1, 0, 0, 0, 0, 0]);
+  // still the knitter's Cell after a Separation switch, and after the Merge goes
+  assert.deepEqual(cellsOfRow(view(YELLOWS, { ...painted, separation: 2 }), 2), [
+    1, 0, 0, 0, 0, 0,
+  ]);
+  assert.deepEqual(cellsOfRow(view(YELLOWS, { ...painted, merges: {} }), 2), [1, 0, 0, 0, 0, 0]);
+});
+
+test("a Repaint to a slot a Merge folded away is refused, because nothing reads it", () => {
+  assert.throws(() => repaint(YELLOWS, oneYarn, { row: 2, from: 0, to: 0 }, 2), /no Palette entry 2/);
+});
+
+test("a Merge survives a Resize, and a Resize down and back up survives a Merge", () => {
+  const half = { ...oneYarn, scale: { rows: 1, cols: 3 } };
+  assert.deepEqual(view(YELLOWS, half).cells, [[1, 1, 1]]); // Row 1, one yarn across
+  assert.deepEqual(view(YELLOWS, { ...half, scale: { rows: 2, cols: 6 } }), view(YELLOWS, oneYarn));
+});
+
+test("a Chart parsed before Separations existed takes a Merge over the one it has", () => {
+  const shown = view(CHART, mergeEntries(CHART, UNREAD, 0, 2));
+  assert.equal(shown.palette.length, 3);
+  assert.equal(shown.palette[0].into, 2); // Rust holds six Cells to the white's four
+  // A Merged entry is several colours averaged, so it carries no name out of the
+  // parse — the same as an entry the parser's own merging produced. The knitter's
+  // Colorway is not that name and does survive: it is keyed by the slot.
+  assert.equal(entryLabel(shown, 2), "Colour C");
+  assert.equal(entryLabel(view(CHART, { ...UNREAD, names: { "0,2": "Rust" } }), 2), "Rust");
+  assert.deepEqual(counted(runsOfRow(shown, 1, LEFT_TO_RIGHT)), [
+    { entry: 2, count: 1 },
+    { entry: 1, count: 1 },
+    { entry: 2, count: 1 },
+    { entry: 1, count: 1 },
+    { entry: 2, count: 1 },
+    { entry: 1, count: 1 },
+  ]);
 });
