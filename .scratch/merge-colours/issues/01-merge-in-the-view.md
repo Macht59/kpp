@@ -2,7 +2,7 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** claimed
+**Status:** resolved
 
 Nothing the knitter can see. This is the whole of the Merge machinery, in
 `web/chart.js`, behind a fifth field of the view state — the screen comes in
@@ -56,9 +56,9 @@ finest entry is read as one.
 
 ## Comments
 
-Built in the working tree, not yet committed. `mergedInto`, `mergedPalette` and
-`entriesOf` in `web/chart.js`, composed by `view` and read by `repaint`;
-`mergeEntries` beside `repaint` as the primitive the screen calls.
+**Shipped** in `feat(web): Call two colours one yarn`. `mergedInto`,
+`mergedPalette` and `entriesOf` in `web/chart.js`, composed by `view` and read by
+`repaint`; `mergeEntries` beside `repaint` as the primitive the screen calls.
 
 One thing the ticket did not say and the tests now do: a Merged entry carries no
 `name` out of the parse, the same as an entry the parser's own merging produced —

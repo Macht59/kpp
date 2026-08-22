@@ -2,7 +2,7 @@
 
 **Blocked by:** 01
 
-**Status:** claimed
+**Status:** resolved
 
 The screen for [ticket 01](01-merge-in-the-view.md)'s machinery. Review only: a
 Merge rewrites every Readout in the Chart, and a knitter mid-Row must not have
@@ -57,8 +57,9 @@ field list is left alone.
 
 ## Comments
 
-Built in the working tree, not yet committed. The Colorway swatch is a button
-opening `#merge-palette`; `#unmerge` takes back the last Merge of the session
+**Shipped** in `feat(web): Call two colours one yarn`, reviewed and corrected in
+`fix(web): Keep the knitter's place in the Separation list under a Merge`. The
+Colorway swatch is a button opening `#merge-palette`; `#unmerge` takes back the last Merge of the session
 off its own stack. `entriesOf` filters the holes out of all three pickers and
 feeds the colour count; `separationChoices` labels the marked answer.
 

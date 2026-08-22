@@ -1,6 +1,6 @@
 # Merging Palette entries — spec
 
-Status: ready-for-agent
+Status: done
 Feature: merge-colours
 
 Collapsed from a `/grilling` session, frontier empty. One customer request: a
