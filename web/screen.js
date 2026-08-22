@@ -44,20 +44,23 @@ export function blankWords({ blank, trimmed }) {
  * who has chosen nothing is still reading at the parser's default, and marking
  * their choice would mark nothing at all.
  *
- * The marked answer says what a Merge has done to it, because the count beside
- * it is the count on screen and the two would otherwise disagree with no
- * explanation. The others keep the parse's own counts: that is what switching to
- * them gives, Merges and all.
+ * The labels are the parse's own counts and nothing else, which is what
+ * switching to one of them gives — so they are the same list until the Chart is,
+ * and the list can be built once. What a Merge has done comes back beside them
+ * as `merged`, for the marked answer alone: the count on screen is fewer than
+ * the answer says, and the two would otherwise disagree with no explanation.
+ * Null when nothing is Merged away, which is most Charts.
  */
 export function separationChoices(chart, shown) {
   const offered = separations(chart);
   const reading = entriesOf(shown).length;
-  const labels = offered.map(({ colours }, at) =>
-    at === shown.separation && reading < colours
-      ? `${paletteWords(colours)} (${reading} merged)`
-      : paletteWords(colours),
-  );
-  return { hidden: labels.length < 2, labels, marked: shown.separation };
+  const labels = offered.map(({ colours }) => paletteWords(colours));
+  return {
+    hidden: labels.length < 2,
+    labels,
+    marked: shown.separation,
+    merged: reading < offered[shown.separation].colours ? reading : null,
+  };
 }
 
 /**

@@ -613,24 +613,32 @@ function drawFacts() {
  * Row must not have the instructions change under them.
  */
 function drawSeparations() {
-  const { hidden, labels, marked } = separationChoices(chart, shown);
+  const { hidden, labels, marked, merged } = separationChoices(chart, shown);
   separationChoice.hidden = hidden;
   const buttons = () => [...separationList.querySelectorAll("button")];
-  // Built again only when the answers themselves changed — another Chart, or a
-  // Merge relabelling the marked one. Replacing a button takes the focus off it,
+  // Built again only when the answers themselves changed, which means another
+  // Chart. Replacing the button the knitter just tapped takes the focus off it,
   // and someone walking the list by keyboard or screen reader — comparing counts
   // is the whole point of it — would be dropped out of the list at every tap.
-  if (buttons().map((button) => button.textContent).join() !== labels.join())
+  // Compared against the answers rather than against what the buttons say: what
+  // a Merge has done rides on whichever answer is marked, so the words move from
+  // one button to another as the knitter switches while the answers stand still.
+  if (buttons().map((button) => button.dataset.answer).join() !== labels.join())
     separationList.replaceChildren(...labels.map(choosable));
-  for (const [at, button] of buttons().entries())
+  for (const [at, button] of buttons().entries()) {
+    button.textContent =
+      at === marked && merged !== null ? `${labels[at]} (${merged} merged)` : labels[at];
     button.setAttribute("aria-pressed", String(at === marked));
+  }
 }
 
 /** One answer: the colour count, tappable, marked when it is the one on screen. */
 function choosable(label, at) {
   const item = document.createElement("li");
   const button = document.createElement("button");
-  button.textContent = label;
+  // The answer it stands for, which is what the list is rebuilt against — the
+  // words on it also say what a Merge has done, and that is not the answer.
+  button.dataset.answer = label;
   button.addEventListener("click", () => adopt({ ...chosenView, separation: at }));
   item.append(button);
   return item;
@@ -773,23 +781,27 @@ function drawPalettes() {
  * to Merge with.
  */
 function drawMerging(entries) {
-  const others = entries.filter(({ entry }) => entry !== openColorway);
-  mergePalette.hidden = openColorway === null || !others.length;
-  mergePalette.replaceChildren(
-    ...others.map(({ colour, entry }) => pickable(colour, entry, mergeWith)),
-  );
-  // Named for what tapping one does rather than for the colour it is: a strip of
-  // swatches called "Colour B" says nothing to anyone who cannot see it, and
-  // this is the one picker whose colours are both halves of the statement.
-  if (openColorway !== null)
-    for (const button of mergePalette.querySelectorAll("button")) {
-      const other = entryLabel(shown, Number(button.dataset.entry));
-      button.title = `Merge ${entryLabel(shown, openColorway)} with ${other}`;
-      button.setAttribute("aria-label", button.title);
-    }
-  for (const swatch of colorwayList.querySelectorAll("button.swatch"))
-    swatch.setAttribute("aria-expanded", String(Number(swatch.dataset.entry) === openColorway));
   unmerge.disabled = !mergings.length;
+  const others = openColorway === null ? [] : entries.filter(({ entry }) => entry !== openColorway);
+  // Emptied rather than merely hidden when there is nothing to Merge with: a
+  // strip of live buttons behind `hidden` is a Merge waiting to be made against
+  // whichever colour the picker was last shut over.
+  mergePalette.hidden = !others.length;
+  mergePalette.replaceChildren(
+    // Named for what tapping one does rather than for the colour it is: a strip
+    // of swatches called "Colour B" says nothing to anyone who cannot see it,
+    // and this is the one picker whose colours are both halves of the statement.
+    ...others.map(({ colour, entry }) =>
+      pickable(colour, entry, mergeWith, `Merge ${entryLabel(shown, openColorway)} with `),
+    ),
+  );
+  // Marked from the picker rather than from the tap, so a swatch is never left
+  // outlined as open over a strip that has nothing in it to show.
+  for (const swatch of colorwayList.querySelectorAll("button.swatch"))
+    swatch.setAttribute(
+      "aria-expanded",
+      String(!mergePalette.hidden && Number(swatch.dataset.entry) === openColorway),
+    );
 }
 
 /**
@@ -889,9 +901,11 @@ function rename(entry, name) {
 
 /**
  * One Palette entry: the count of entries the eye catches rather than reads, and
- * the handle both Repaints hang off — armed in Review, tapped under a chip in Knit.
+ * the handle both Repaints hang off — armed in Review, tapped under a chip in
+ * Knit. `said` is what tapping it does, for the picker where the colour alone
+ * does not say it.
  */
-function pickable(colour, entry, choose) {
+function pickable(colour, entry, choose, said = "") {
   const item = document.createElement("li");
   const button = document.createElement("button");
   button.className = "swatch";
@@ -899,7 +913,7 @@ function pickable(colour, entry, choose) {
   // The entry it stands for, not its place in the list: a Merge leaves the
   // entries a knitter can see at their own indices with gaps between them.
   button.dataset.entry = entry;
-  button.title = entryLabel(shown, entry);
+  button.title = said + entryLabel(shown, entry);
   button.setAttribute("aria-label", button.title);
   button.addEventListener("click", () => choose(entry));
   item.append(button);

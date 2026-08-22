@@ -28,11 +28,16 @@ so it moves as a Merge is made.
 
 **The Separation chooser** marks *"12 colours (11 merged)"* while a Merge is in
 force; the other answers keep the parse's own counts, which is what switching to
-them gives.
+them gives. What a Merge has done is written onto the marked button rather than
+into the answers themselves — the answers are what the list is rebuilt against,
+and a suffix that moves from one button to another as the knitter switches would
+rebuild the list under their finger at every tap.
 
 **Persistence.** `merges` joins the view state written by `keepThisChart` and
-`drawRow`, and `library.stored()`'s field list, so the library row states the
-size and colours of the Chart the knitter is reading.
+`drawRow`, which is the whole of it: the library row states a Chart's size, and
+by this feature's own rule a Merge cannot change one — Blank edges are measured
+before Merges and the resample is downstream of neither. So `library.stored()`'s
+field list is left alone.
 
 - [x] Tapping a Colorway swatch opens a strip of the other entries; tapping one Merges the two
 - [x] Tapping the open swatch shuts the strip; tapping another swatch moves it
@@ -65,3 +70,19 @@ Two decisions taken while building, neither in the ticket:
   colours are halves of the same statement.
 - `drawFacts` rebuilds the Colorway list *before* the pickers, so the Merge
   picker marks a swatch that exists rather than one about to be replaced.
+
+**Reviewed** at `high`, four findings, all four fixed:
+
+- The Separation chooser's `(N merged)` suffix rode inside the labels, so with a
+  Merge in force the label array changed on every switch and the list was rebuilt
+  under the knitter's finger — the focus loss the rebuild guard exists to
+  prevent. `separationChoices` now returns `merged` beside the labels, the guard
+  compares `dataset.answer`, and the words are written onto the marked button.
+- A Chart with one colour on screen marked its Colorway swatch `aria-expanded`
+  over an empty strip, outlining it red with nothing beneath. Marked from the
+  picker now, not from the tap.
+- With the picker shut, `drawMerging` was filling it with live buttons behind
+  `hidden` — churn on every keystroke in a Colorway box, and a Merge against
+  `null` waiting for anything that ever showed the element. Emptied instead.
+- `merges` in `library.stored()`'s field list changed nothing the row states.
+  Dropped.

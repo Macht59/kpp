@@ -76,15 +76,21 @@ test("the answer marked is the one being read, not the knitter's choice", () => 
   assert.equal(separationChoices(CHART, view(CHART, chosen)).marked, 1);
 });
 
-test("the answer being read says what a Merge has done to it", () => {
-  // The count beside the marked answer is the count on screen, and the two would
-  // otherwise disagree with no explanation. The others keep the parse's own
-  // counts, because that is what switching to them gives.
+test("what a Merge has done comes back beside the answers, not inside them", () => {
+  // The count on screen is fewer than the marked answer says, and the two would
+  // otherwise disagree with no explanation. It is not one of the labels, because
+  // the labels are the parse's own counts and a knitter switching answers must
+  // not have the list rebuilt under their finger every time.
   const fine = { ...READ, separation: 1 };
   const merged = mergeEntries(CHART, fine, 0, 1);
-  const { labels, marked } = separationChoices(CHART, view(CHART, merged));
-  assert.deepEqual(labels, ["2 colours", "3 colours (2 merged)"]);
-  assert.equal(marked, 1);
+  const said = separationChoices(CHART, view(CHART, merged));
+  assert.deepEqual(said.labels, ["2 colours", "3 colours"]);
+  assert.equal(said.marked, 1);
+  assert.equal(said.merged, 2);
+  // and the answer that already merged them for the parser's own reasons has
+  // nothing to say about it
+  assert.equal(separationChoices(CHART, view(CHART, { ...merged, separation: 0 })).merged, null);
+  assert.equal(separationChoices(CHART, view(CHART, READ)).merged, null);
 });
 
 test("a crop that landed clean says nothing at all", () => {
