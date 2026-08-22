@@ -60,7 +60,11 @@
   .swatch { width: 28px; height: 28px; border: 1px solid currentColor; border-radius: 0.25rem; }
   /* Two pickers, one primitive: the Palette bar arms a Repaint in Review, and
      the same buttons under a tapped Run chip repaint it in Knit. */
-  #palette button, #chip-palette button { width: 44px; height: 44px; padding: 0; }
+  #palette button, #chip-palette button, #merge-palette button { width: 44px; height: 44px; padding: 0; }
+  /* Three pickers now: the Colorway swatch opens the one that Merges two
+     colours, so it is a target rather than a label. */
+  #colorway-list button.swatch { flex: none; width: 44px; height: 44px; padding: 0; }
+  #unmerge { width: auto; padding: 0.5rem 0.9rem; }
   [aria-pressed=true], [aria-expanded=true] { outline: 3px solid #c0392b; outline-offset: 2px; }
   /* Knitting a Row backwards is the mistake this bar exists to prevent, so it
      says the direction in an arrow and in words, right under the Row it describes. */
@@ -90,7 +94,7 @@
   #cropped img { display: block; max-width: none; }
   #size { font-size: 1.25rem; }
   #palette-size { margin: 0; font-size: 1.25rem; font-weight: 700; } /* nine entries coming back as seven is silent otherwise */
-  #palette, #chip-palette, #separations { display: flex; flex-wrap: wrap; gap: 0.4rem; list-style: none; margin: 0; padding: 0; }
+  #palette, #chip-palette, #merge-palette, #separations { display: flex; flex-wrap: wrap; gap: 0.4rem; list-style: none; margin: 0; padding: 0; }
   #separation { display: flex; flex-direction: column; gap: 0.4rem; }
   #separation-hint { margin: 0; opacity: 0.8; }
   #resize { display: flex; flex-direction: column; gap: 0.4rem; }
@@ -231,8 +235,11 @@
          the swatch above: that swatch arms a Repaint, and a knitter correcting
          Cells who holds it a beat too long must not get a keyboard. -->
     <div id="colorways">
-      <p id="colorways-hint">Call these colours what your pattern calls them:</p>
+      <p id="colorways-hint">Call these colours what your pattern calls them, or
+        tap a swatch to merge it with a colour you knit in the same yarn:</p>
       <ul id="colorway-list"></ul>
+      <ul id="merge-palette" hidden></ul>
+      <button id="unmerge" disabled>Undo the merge</button>
     </div>
     <div id="viewport">
       <div id="pannable">

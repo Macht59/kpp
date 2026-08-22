@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { view } from "./chart.js";
+import { mergeEntries, view } from "./chart.js";
 import {
   KNIT,
   REVIEW,
@@ -74,6 +74,17 @@ test("the answer marked is the one being read, not the knitter's choice", () => 
   assert.equal(separationChoices(CHART, view(CHART, READ)).marked, 0);
   const chosen = { ...READ, separation: 1 };
   assert.equal(separationChoices(CHART, view(CHART, chosen)).marked, 1);
+});
+
+test("the answer being read says what a Merge has done to it", () => {
+  // The count beside the marked answer is the count on screen, and the two would
+  // otherwise disagree with no explanation. The others keep the parse's own
+  // counts, because that is what switching to them gives.
+  const fine = { ...READ, separation: 1 };
+  const merged = mergeEntries(CHART, fine, 0, 1);
+  const { labels, marked } = separationChoices(CHART, view(CHART, merged));
+  assert.deepEqual(labels, ["2 colours", "3 colours (2 merged)"]);
+  assert.equal(marked, 1);
 });
 
 test("a crop that landed clean says nothing at all", () => {

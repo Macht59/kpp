@@ -52,6 +52,10 @@ _Avoid_: Yarn colour, thread, alias, colour name
 How finely a parse divides near colours into distinct Palette entries — whether a light green and a dark green are one entry or two. A parse returns several Separations of the same Chart, coarse to fine, and the knitter picks the one whose Palette matches the yarns in front of them. Choosing a different Separation is not a Re-parse: the Chart does not change, only how many colours it is read as having.
 _Avoid_: Sensitivity, tolerance, threshold, granularity, merge distance
 
+**Merge**:
+To declare two or more Palette entries one colour, because the knitter knits them in one yarn. Their own statement about the pattern, like a Repaint, so it outlives a change of Separation — and unlike a Separation, which is the parser's merging of near colours rather than theirs. Merged entries read as one everywhere: one swatch, one Colorway, one Run.
+_Avoid_: Combine, group, join, link, unify, dedupe
+
 **Repaint**:
 To set a Cell, or a contiguous span of Cells, to a different Palette entry — or to Non-stitch. A Repaint is the knitter's own statement about a Cell, so it outlives a change of Separation.
 _Avoid_: Recolour, fill, edit

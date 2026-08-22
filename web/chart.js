@@ -289,6 +289,61 @@ function countsOf(chart) {
 }
 
 /**
+ * The entry of a Separation's Palette that each of its entries is read as, once
+ * the knitter's Merges are applied — the identity where they have Merged
+ * nothing. `merges` is their statement, recorded at the *finest* Palette so it
+ * outlives a change of Separation, which means two Separation entries are one
+ * colour exactly when a finest entry of each shares a Merge group.
+ *
+ * A class lands on the entry of its most-used member — most Cells in the parse,
+ * ties to the lowest index — so the slot it takes is the colour the group mostly
+ * was. The class's other entries become holes: nothing is renumbered, because
+ * everything keyed by Palette index, a knitter's Colorway most of all, would
+ * otherwise land on a colour they never named.
+ */
+function mergedInto(merge, merges, counts) {
+  const colours = merge.reduce((most, to) => Math.max(most, to), 0) + 1;
+  const parent = Array.from({ length: colours }, (_, at) => at);
+  const find = (at) => (parent[at] === at ? at : (parent[at] = find(parent[at])));
+  const rooted = {}; // the first Separation entry seen for each Merge group
+  const cells = Array.from({ length: colours }, () => 0);
+  merge.forEach((to, from) => {
+    cells[to] += counts[from];
+    const root = merges[from];
+    if (root === undefined) return;
+    if (rooted[root] === undefined) rooted[root] = to;
+    else parent[find(to)] = find(rooted[root]);
+  });
+  const most = [];
+  for (let at = 0; at < colours; at += 1) {
+    const group = find(at);
+    if (most[group] === undefined || cells[at] > cells[most[group]]) most[group] = at;
+  }
+  return Array.from({ length: colours }, (_, at) => most[find(at)]);
+}
+
+/**
+ * A Separation's Palette with the knitter's Merges in it, at unchanged length: a
+ * surviving entry is every finest entry of its class averaged by Cell count —
+ * the rule the parser's own merges already come through `paletteOf` under — and
+ * a hole keeps what it held and says which entry it is read as. Whatever a hole
+ * was named stays named, and comes back if the Merge is taken back.
+ */
+function mergedPalette(chart, base, merge, into, counts) {
+  const averaged = paletteOf(chart, merge.map((to) => into[to]), counts);
+  return base.map((entry, at) => (into[at] === at ? averaged[at] : { ...entry, into: into[at] }));
+}
+
+/**
+ * A view's Palette entries that are colours in their own right, each with its
+ * own index — what a list of swatches shows and what the colour count counts.
+ * `palette.length` is not that count once a Merge exists: the entries a Merge
+ * folded away are still in it, holding their place.
+ */
+export const entriesOf = (shown) =>
+  shown.palette.flatMap((colour, entry) => (colour.into === undefined ? [{ colour, entry }] : []));
+
+/**
  * Which Cell of a line of `source` Cells the Cell at `at` of a line of `outOf`
  * of them is sampled from — the resample, in one direction and one step. Read
  * forwards it fills a resized Chart; read on a Cell the knitter has pointed at
@@ -338,14 +393,29 @@ function resampled(cells, { rows, cols }) {
  * being read, and `blank` comes back either way so the knitter can be told what
  * is being kept from them.
  */
-export function view(chart, { separation, trimmed = false, overlay = {}, names = {}, scale } = {}) {
+export function view(
+  chart,
+  { separation, trimmed = false, overlay = {}, names = {}, merges = {}, scale } = {},
+) {
   const { index, merge } = separationOf(chart, separation);
-  const palette = named(paletteOf(chart, merge, countsOf(chart)), names, index);
-  const read = (cell) => (cell === NON_STITCH ? NON_STITCH : merge[cell]);
+  const counts = countsOf(chart);
+  const base = paletteOf(chart, merge, counts);
+  // Measured before the Merges, against the Separation's own colours, so a
+  // Merge cannot hide a Row: two off-whites declared one yarn may average to a
+  // colour past the near-white gate, and an edge Row vanishing under a knitter
+  // would renumber every Row above it for a reason they never asked for. The
+  // rule a Repaint already follows, and the same call it followed it under.
+  const blank = blankEdgesOf(chart, {
+    index,
+    palette: base,
+    read: (cell) => (cell === NON_STITCH ? NON_STITCH : merge[cell]),
+  });
+  const into = mergedInto(merge, merges, counts);
+  const palette = named(mergedPalette(chart, base, merge, into, counts), names, index);
+  const read = (cell) => (cell === NON_STITCH ? NON_STITCH : into[merge[cell]]);
   const painted = chart.cells.map((cells, r) =>
     cells.map((cell, c) => read(overlay[`${r},${c}`] ?? cell)),
   );
-  const blank = blankEdgesOf(chart, { index, palette, read });
   // The Separation actually read at, which is the knitter's only when they have
   // chosen one — a chooser marking their choice rather than the answer on screen
   // would mark nothing at all on a Chart they have never touched.
@@ -424,8 +494,12 @@ export function repaint(chart, state, { row, from, to }, entry, shown = view(cha
   // overlay is a Cell with no colour that only shows up when something draws it.
   const { merge } = separationOf(chart, state.separation);
   const counts = countsOf(chart);
+  // Over the Merged class rather than the Separation's entry, so painting a
+  // colour the knitter Merged stores the shade it mostly was — and a Cell they
+  // paint is never left indexing an entry a Merge folded away.
+  const into = mergedInto(merge, state.merges ?? {}, counts);
   const finest = merge.reduce(
-    (best, to, from) => (to === entry && (best < 0 || counts[from] > counts[best]) ? from : best),
+    (best, to, from) => (into[to] === entry && (best < 0 || counts[from] > counts[best]) ? from : best),
     -1,
   );
   if (entry !== NON_STITCH && finest < 0)
@@ -444,4 +518,40 @@ export function repaint(chart, state, { row, from, to }, entry, shown = view(cha
   for (let col = first; col <= last; col += 1)
     overlay[`${index},${nearest(col, colCount(shown), source.cols) + left}`] = stored;
   return { ...state, overlay };
+}
+
+/**
+ * The state with two Palette entries of the Chart on screen declared one
+ * colour, because the knitter knits them in one yarn. Recorded at the *finest*
+ * Palette, so it outlives a change of Separation: the only way to say "these
+ * two entries are one" in finest terms is the union of the finest entries
+ * behind them, which is why Merging two entries of a coarse Separation
+ * collapses every shade inside both at a finer one. That is the knitter's
+ * statement read out to its end — a shade *inside* a colour they call one yarn
+ * cannot be a different yarn from it.
+ *
+ * New state comes back rather than a mutation, so taking a Merge back is
+ * keeping the state it was made from. Merging a colour with itself is no
+ * statement at all and comes back unchanged rather than refused. An entry
+ * outside the Chart — Non-stitch among them, which is yarn's absence rather
+ * than a colour — is refused, because a Merge is between two colours.
+ */
+export function mergeEntries(chart, state, first, second) {
+  const { merge } = separationOf(chart, state.separation);
+  const counts = countsOf(chart);
+  const into = mergedInto(merge, state.merges ?? {}, counts);
+  for (const entry of [first, second])
+    if (into[entry] === undefined) throw new Error(`no Palette entry ${entry} in this Chart`);
+  if (into[first] === into[second]) return state;
+  // Every finest entry read as either class, so a Merge onto a group takes the
+  // whole group with it rather than splitting it. Rooted at the lowest of them,
+  // which is arbitrary but the same however the knitter arrived at the group.
+  const group = [];
+  merge.forEach((to, from) => {
+    if (into[to] === into[first] || into[to] === into[second]) group.push(from);
+  });
+  const merges = { ...(state.merges ?? {}) };
+  const root = Math.min(...group);
+  for (const entry of group) merges[entry] = root;
+  return { ...state, merges };
 }
